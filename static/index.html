@@ -5,14 +5,219 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GitHub Repository Manager</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            margin: 0;
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            color: #c9d1d9;
+            min-height: 100vh;
             padding: 20px;
-            background-color: #f5f5f5;
         }
-        h1 {
-            color: #333;
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+            background: rgba(22, 27, 34, 0.6);
+            border-radius: 12px;
+            border: 1px solid #30363d;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #58a6ff 0%, #79c0ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #8b949e;
+            font-size: 1.1rem;
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+            gap: 24px;
+            padding: 0 20px;
+        }
+
+        .repo-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+
+        .repo-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+            border-color: #58a6ff;
+        }
+
+        .repo-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #21262d;
+        }
+
+        .repo-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #58a6ff;
+        }
+
+        .language {
+            background: #1f6feb;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .repo-meta {
+            margin-bottom: 16px;
+            color: #8b949e;
+            font-size: 0.9rem;
+        }
+
+        .branch-summary {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .badge.ready {
+            background: rgba(46, 160, 67, 0.2);
+            color: #3fb950;
+            border: 1px solid #2ea043;
+        }
+
+        .badge.review {
+            background: rgba(187, 128, 9, 0.2);
+            color: #d29922;
+            border: 1px solid #bb8009;
+        }
+
+        .badge.update {
+            background: rgba(248, 81, 73, 0.2);
+            color: #f85149;
+            border: 1px solid #da3633;
+        }
+
+        .branches {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .branch {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-left: 3px solid #30363d;
+            border-radius: 6px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+
+        .branch:hover {
+            background: #161b22;
+            border-left-color: #58a6ff;
+        }
+
+        .branch.readyforpr {
+            border-left-color: #3fb950;
+        }
+
+        .branch.inreview {
+            border-left-color: #d29922;
+        }
+
+        .branch.needsupdate {
+            border-left-color: #f85149;
+        }
+
+        .branch-name {
+            font-weight: 500;
+            color: #c9d1d9;
+            flex: 1;
+        }
+
+        .branch-status {
+            background: rgba(110, 118, 129, 0.2);
+            color: #8b949e;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin: 0 8px;
+        }
+
+        .branch.readyforpr .branch-status {
+            background: rgba(46, 160, 67, 0.2);
+            color: #3fb950;
+        }
+
+        .branch.inreview .branch-status {
+            background: rgba(187, 128, 9, 0.2);
+            color: #d29922;
+        }
+
+        .branch.needsupdate .branch-status {
+            background: rgba(248, 81, 73, 0.2);
+            color: #f85149;
+        }
+
+        .branch-diff {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            font-size: 0.85rem;
+            color: #8b949e;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 768px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+
+            header h1 {
+                font-size: 2rem;
+            }
+
+            .repo-card {
+                padding: 16px;
+            }
         }
     </style>
 </head>
