@@ -1,9 +1,10 @@
 //! Local SQLite storage
 
 use crate::{
-    models::{Branch, BranchStatus, PRState, PullRequest, Repository},
+    models::{Branch, BranchStatus, Group, PRState, PullRequest, Repository},
     Result,
 };
+use chrono::Utc;
 use rusqlite::{params, Connection};
 use std::path::Path;
 
@@ -185,6 +186,137 @@ impl Database {
         self.conn.execute(
             "DELETE FROM pull_requests WHERE repo_id = ?1",
             params![repo_id],
+        )?;
+        Ok(())
+    }
+
+    // Group management methods
+    pub fn create_group(&self, name: &str, display_order: i32) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO groups (name, display_order, created_at) VALUES (?1, ?2, ?3)",
+            params![name, display_order, Utc::now().to_rfc3339()],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn get_all_groups(&self) -> Result<Vec<Group>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, display_order, created_at FROM groups ORDER BY display_order"
+        )?;
+
+        let groups = stmt
+            .query_map([], |row| {
+                Ok(Group {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    display_order: row.get(2)?,
+                    created_at: row.get::<_, String>(3)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(groups)
+    }
+
+    pub fn add_repo_to_group(&self, repo_id: &str, group_id: i64) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO repo_groups (repo_id, group_id, added_at) VALUES (?1, ?2, ?3)",
+            params![repo_id, group_id, Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_repo_from_group(&self, repo_id: &str, group_id: i64) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM repo_groups WHERE repo_id = ?1 AND group_id = ?2",
+            params![repo_id, group_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_repos_in_group(&self, group_id: i64) -> Result<Vec<Repository>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT r.id, r.owner, r.name, r.language, r.description, r.pushed_at, r.created_at, r.updated_at, r.is_fork, r.priority
+             FROM repositories r
+             INNER JOIN repo_groups rg ON r.id = rg.repo_id
+             WHERE rg.group_id = ?1
+             ORDER BY r.pushed_at DESC"
+        )?;
+
+        let repos = stmt
+            .query_map([group_id], |row| {
+                Ok(Repository {
+                    id: row.get(0)?,
+                    owner: row.get(1)?,
+                    name: row.get(2)?,
+                    language: row.get(3)?,
+                    description: row.get(4)?,
+                    pushed_at: row.get::<_, String>(5)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    created_at: row.get::<_, String>(6)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    updated_at: row.get::<_, String>(7)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    is_fork: row.get::<_, i32>(8)? != 0,
+                    priority: row.get(9)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(repos)
+    }
+
+    pub fn get_ungrouped_repositories(&self) -> Result<Vec<Repository>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, owner, name, language, description, pushed_at, created_at, updated_at, is_fork, priority
+             FROM repositories
+             WHERE id NOT IN (SELECT repo_id FROM repo_groups)
+             ORDER BY pushed_at DESC"
+        )?;
+
+        let repos = stmt
+            .query_map([], |row| {
+                Ok(Repository {
+                    id: row.get(0)?,
+                    owner: row.get(1)?,
+                    name: row.get(2)?,
+                    language: row.get(3)?,
+                    description: row.get(4)?,
+                    pushed_at: row.get::<_, String>(5)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    created_at: row.get::<_, String>(6)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    updated_at: row.get::<_, String>(7)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    is_fork: row.get::<_, i32>(8)? != 0,
+                    priority: row.get(9)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(repos)
+    }
+
+    pub fn delete_group(&self, group_id: i64) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM groups WHERE id = ?1",
+            params![group_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn rename_group(&self, group_id: i64, new_name: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE groups SET name = ?1 WHERE id = ?2",
+            params![new_name, group_id],
         )?;
         Ok(())
     }

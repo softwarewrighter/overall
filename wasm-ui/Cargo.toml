@@ -15,6 +15,7 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 yew = { workspace = true }
 wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
 web-sys = { workspace = true }
 gloo = { workspace = true }
 yew-router = { workspace = true }

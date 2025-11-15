@@ -5,6 +5,9 @@
 use yew::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsCast;
+
+#[cfg(target_arch = "wasm32")]
 #[derive(Clone, PartialEq)]
 struct Repository {
     id: String,
@@ -49,6 +52,7 @@ fn app() -> Html {
     let groups = use_state(|| Vec::<RepoGroup>::new());
     let active_tab = use_state(|| 0usize);
     let selected_repo = use_state(|| None::<Repository>);
+    let show_add_dialog = use_state(|| false);
     let build_info = use_state(|| BuildInfo {
         version: "0.1.0".to_string(),
         build_date: "Loading...".to_string(),
@@ -104,6 +108,20 @@ fn app() -> Html {
         })
     };
 
+    let on_open_add_dialog = {
+        let show_add_dialog = show_add_dialog.clone();
+        Callback::from(move |_| {
+            show_add_dialog.set(true);
+        })
+    };
+
+    let on_close_add_dialog = {
+        let show_add_dialog = show_add_dialog.clone();
+        Callback::from(move |_| {
+            show_add_dialog.set(false);
+        })
+    };
+
     html! {
         <>
             <div class="app-container">
@@ -128,7 +146,7 @@ fn app() -> Html {
                             </button>
                         }
                     })}
-                    <button class="tab tab-add" title="Add new group">{ "+" }</button>
+                    <button class="tab tab-add" title="Add repositories to groups" onclick={on_open_add_dialog.clone()}>{ "+" }</button>
                 </nav>
 
                 <main class="repo-list">
@@ -174,6 +192,12 @@ fn app() -> Html {
 
             { if let Some(repo) = (*selected_repo).clone() {
                 html! { <RepoDetailModal repo={repo} on_close={on_close_modal} /> }
+            } else {
+                html! {}
+            }}
+
+            { if *show_add_dialog {
+                html! { <AddRepoDialog groups={(*groups).clone()} on_close={on_close_add_dialog} /> }
             } else {
                 html! {}
             }}
@@ -333,6 +357,311 @@ fn repo_detail_modal(props: &RepoDetailModalProps) -> Html {
                                 }
                             </div>
                         })}
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Properties, PartialEq)]
+struct AddRepoDialogProps {
+    groups: Vec<RepoGroup>,
+    on_close: Callback<()>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[function_component(AddRepoDialog)]
+fn add_repo_dialog(props: &AddRepoDialogProps) -> Html {
+    let selected_repos = use_state(|| std::collections::HashSet::<String>::new());
+    let target_group = use_state(|| None::<String>);
+    let new_group_name = use_state(|| String::new());
+    let create_new_group = use_state(|| false);
+
+    let on_backdrop_click = {
+        let on_close = props.on_close.clone();
+        Callback::from(move |_| on_close.emit(()))
+    };
+
+    let on_modal_click = Callback::from(|e: MouseEvent| {
+        e.stop_propagation();
+    });
+
+    let on_close_button_click = {
+        let on_close = props.on_close.clone();
+        Callback::from(move |_| on_close.emit(()))
+    };
+
+    // Find ungrouped repos
+    let ungrouped_repos = props
+        .groups
+        .iter()
+        .find(|g| g.name == "Ungrouped")
+        .map(|g| g.repos.clone())
+        .unwrap_or_default();
+
+    // Get existing group names (excluding Ungrouped)
+    let existing_groups: Vec<String> = props
+        .groups
+        .iter()
+        .filter(|g| g.name != "Ungrouped")
+        .map(|g| g.name.clone())
+        .collect();
+
+    let on_repo_toggle = {
+        let selected_repos = selected_repos.clone();
+        Callback::from(move |repo_id: String| {
+            let mut repos = (*selected_repos).clone();
+            if repos.contains(&repo_id) {
+                repos.remove(&repo_id);
+            } else {
+                repos.insert(repo_id);
+            }
+            selected_repos.set(repos);
+        })
+    };
+
+    let on_group_change = {
+        let target_group = target_group.clone();
+        Callback::from(move |e: Event| {
+            let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
+            let value = select.value();
+            if value.is_empty() {
+                target_group.set(None);
+            } else {
+                target_group.set(Some(value));
+            }
+        })
+    };
+
+    let on_new_group_toggle = {
+        let create_new_group = create_new_group.clone();
+        let target_group = target_group.clone();
+        Callback::from(move |_| {
+            let new_value = !*create_new_group;
+            create_new_group.set(new_value);
+            if new_value {
+                target_group.set(None);
+            }
+        })
+    };
+
+    let on_new_group_name_change = {
+        let new_group_name = new_group_name.clone();
+        Callback::from(move |e: InputEvent| {
+            let input: web_sys::HtmlInputElement = e.target_unchecked_into();
+            new_group_name.set(input.value());
+        })
+    };
+
+    let on_generate_sql = {
+        let selected_repos = selected_repos.clone();
+        let target_group = target_group.clone();
+        let new_group_name = new_group_name.clone();
+        let create_new_group = create_new_group.clone();
+        let on_close = props.on_close.clone();
+
+        Callback::from(move |_| {
+            if selected_repos.is_empty() {
+                web_sys::window()
+                    .unwrap()
+                    .alert_with_message("Please select at least one repository")
+                    .unwrap();
+                return;
+            }
+
+            let group_name = if *create_new_group {
+                if new_group_name.trim().is_empty() {
+                    web_sys::window()
+                        .unwrap()
+                        .alert_with_message("Please enter a group name")
+                        .unwrap();
+                    return;
+                }
+                (*new_group_name).clone()
+            } else {
+                match (*target_group).clone() {
+                    Some(name) => name,
+                    None => {
+                        web_sys::window()
+                            .unwrap()
+                            .alert_with_message("Please select a target group")
+                            .unwrap();
+                        return;
+                    }
+                }
+            };
+
+            // Generate SQL script
+            let mut sql = String::new();
+
+            if *create_new_group {
+                sql.push_str("-- Create new group\n");
+                sql.push_str(&format!(
+                    "INSERT OR IGNORE INTO groups (name, display_order, created_at) \n\
+                     SELECT '{}', COALESCE(MAX(display_order) + 1, 0), datetime('now', 'utc') || 'Z' \n\
+                     FROM groups;\n\n",
+                    group_name.replace('\'', "''")
+                ));
+            }
+
+            sql.push_str(&format!("-- Add repositories to group '{}'\n", group_name));
+            for repo_id in (*selected_repos).iter() {
+                sql.push_str(&format!(
+                    "INSERT OR IGNORE INTO repo_groups (repo_id, group_id, added_at)\n\
+                     SELECT '{}', id, datetime('now', 'utc') || 'Z' FROM groups WHERE name = '{}';\n",
+                    repo_id.replace('\'', "''"),
+                    group_name.replace('\'', "''")
+                ));
+            }
+
+            // Download the SQL file
+            let blob_options = web_sys::BlobPropertyBag::new();
+            blob_options.set_type("text/plain");
+            let blob = web_sys::Blob::new_with_str_sequence_and_options(
+                &js_sys::Array::of1(&wasm_bindgen::JsValue::from_str(&sql)),
+                &blob_options,
+            )
+            .unwrap();
+
+            let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+            let document = web_sys::window().unwrap().document().unwrap();
+            let a: web_sys::HtmlAnchorElement = document
+                .create_element("a")
+                .unwrap()
+                .dyn_into()
+                .unwrap();
+
+            a.set_href(&url);
+            a.set_download("add-repos.sql");
+            a.click();
+
+            web_sys::Url::revoke_object_url(&url).unwrap();
+
+            on_close.emit(());
+        })
+    };
+
+    html! {
+        <div class="modal-backdrop" onclick={on_backdrop_click}>
+            <div class="modal-content add-repo-modal" onclick={on_modal_click}>
+                <div class="modal-header">
+                    <h2>{ "Add Repositories to Group" }</h2>
+                    <button class="close-button" onclick={on_close_button_click.clone()}>{ "✕" }</button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="add-repo-section">
+                        <h3>{ format!("Select Repositories ({} ungrouped)", ungrouped_repos.len()) }</h3>
+                        <div class="repo-selection-list">
+                            { if ungrouped_repos.is_empty() {
+                                html! { <p class="empty-message">{ "No ungrouped repositories available" }</p> }
+                            } else {
+                                html! {
+                                    <>
+                                        { for ungrouped_repos.iter().map(|repo| {
+                                            let is_selected = selected_repos.contains(&repo.id);
+                                            let repo_id = repo.id.clone();
+                                            let onclick = {
+                                                let on_repo_toggle = on_repo_toggle.clone();
+                                                let repo_id = repo_id.clone();
+                                                Callback::from(move |_| on_repo_toggle.emit(repo_id.clone()))
+                                            };
+
+                                            html! {
+                                                <div class={classes!("repo-checkbox-item", is_selected.then_some("selected"))} {onclick}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={is_selected}
+                                                        readonly=true
+                                                    />
+                                                    <div class="repo-checkbox-info">
+                                                        <span class="repo-name">{ &repo.id }</span>
+                                                        <span class="repo-meta-small">
+                                                            <span class="language-badge-small">{ &repo.language }</span>
+                                                            <span>{ &repo.last_push }</span>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            }
+                                        })}
+                                    </>
+                                }
+                            }}
+                        </div>
+                    </div>
+
+                    <div class="add-repo-section">
+                        <h3>{ "Target Group" }</h3>
+
+                        <div class="group-selection">
+                            <label class="group-option">
+                                <input
+                                    type="radio"
+                                    name="group-type"
+                                    checked={!*create_new_group}
+                                    onclick={on_new_group_toggle.clone()}
+                                />
+                                <span>{ "Existing Group:" }</span>
+                            </label>
+
+                            <select
+                                class="group-select"
+                                disabled={*create_new_group}
+                                onchange={on_group_change}
+                            >
+                                <option value="" selected={target_group.is_none()}>
+                                    { "-- Select a group --" }
+                                </option>
+                                { for existing_groups.iter().map(|group| {
+                                    let is_selected = target_group.as_ref() == Some(group);
+                                    html! {
+                                        <option value={group.clone()} selected={is_selected}>
+                                            { group }
+                                        </option>
+                                    }
+                                })}
+                            </select>
+
+                            <label class="group-option">
+                                <input
+                                    type="radio"
+                                    name="group-type"
+                                    checked={*create_new_group}
+                                    onclick={on_new_group_toggle.clone()}
+                                />
+                                <span>{ "New Group:" }</span>
+                            </label>
+
+                            <input
+                                type="text"
+                                class="group-name-input"
+                                placeholder="Enter new group name"
+                                disabled={!*create_new_group}
+                                value={(*new_group_name).clone()}
+                                oninput={on_new_group_name_change}
+                            />
+                        </div>
+                    </div>
+
+                    <div class="add-repo-actions">
+                        <button
+                            class="btn btn-primary"
+                            onclick={on_generate_sql}
+                            disabled={selected_repos.is_empty()}
+                        >
+                            { format!("Generate SQL ({} selected)", selected_repos.len()) }
+                        </button>
+                        <button class="btn btn-secondary" onclick={on_close_button_click.clone()}>
+                            { "Cancel" }
+                        </button>
+                    </div>
+
+                    <div class="add-repo-help">
+                        <p>{ "This will generate a SQL script to add the selected repositories to the chosen group." }</p>
+                        <p>{ "Run the script with: " }<code>{ "sqlite3 ~/.overall/overall.db < add-repos.sql" }</code></p>
+                        <p>{ "Then re-export and reload: " }<code>{ "./target/release/overall export" }</code></p>
                     </div>
                 </div>
             </div>
@@ -524,46 +853,94 @@ async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
         last_commit_date: String,
     }
 
+    #[derive(Deserialize)]
+    struct GroupJson {
+        id: i64,
+        name: String,
+        repos: Vec<RepoJson>,
+    }
+
+    #[derive(Deserialize)]
+    struct DataJson {
+        groups: Vec<GroupJson>,
+        ungrouped: Vec<RepoJson>,
+    }
+
     let response = Request::get("/repos.json")
         .send()
         .await
         .map_err(|e| format!("Failed to fetch repos: {:?}", e))?;
 
-    let repos_json: Vec<RepoJson> = response
+    let data: DataJson = response
         .json()
         .await
         .map_err(|e| format!("Failed to parse repos: {:?}", e))?;
 
-    // Convert to Repository structs
-    let repos: Vec<Repository> = repos_json
-        .into_iter()
-        .map(|r| Repository {
-            id: r.id,
-            owner: r.owner,
-            name: r.name,
-            language: r.language,
-            last_push: format_relative_time(&r.last_push),
-            branches: r
-                .branches
-                .into_iter()
-                .map(|b| BranchInfo {
-                    name: b.name,
-                    status: b.status,
-                    ahead: b.ahead_by,
-                    behind: b.behind_by,
-                })
-                .collect(),
-            unmerged_count: r.unmerged_count,
-            pr_count: r.pr_count,
-        })
-        .collect();
+    let mut result = Vec::new();
 
-    // Group repositories (for now, put all in "All Repositories")
-    // In the future, this could be customizable
-    Ok(vec![RepoGroup {
-        name: "All Repositories".to_string(),
-        repos,
-    }])
+    // Convert grouped repositories
+    for group in data.groups {
+        let repos: Vec<Repository> = group.repos
+            .into_iter()
+            .map(|r| Repository {
+                id: r.id,
+                owner: r.owner,
+                name: r.name,
+                language: r.language,
+                last_push: format_relative_time(&r.last_push),
+                branches: r
+                    .branches
+                    .into_iter()
+                    .map(|b| BranchInfo {
+                        name: b.name,
+                        status: b.status,
+                        ahead: b.ahead_by,
+                        behind: b.behind_by,
+                    })
+                    .collect(),
+                unmerged_count: r.unmerged_count,
+                pr_count: r.pr_count,
+            })
+            .collect();
+
+        result.push(RepoGroup {
+            name: group.name,
+            repos,
+        });
+    }
+
+    // Add ungrouped repositories as a separate tab if any exist
+    if !data.ungrouped.is_empty() {
+        let ungrouped_repos: Vec<Repository> = data.ungrouped
+            .into_iter()
+            .map(|r| Repository {
+                id: r.id,
+                owner: r.owner,
+                name: r.name,
+                language: r.language,
+                last_push: format_relative_time(&r.last_push),
+                branches: r
+                    .branches
+                    .into_iter()
+                    .map(|b| BranchInfo {
+                        name: b.name,
+                        status: b.status,
+                        ahead: b.ahead_by,
+                        behind: b.behind_by,
+                    })
+                    .collect(),
+                unmerged_count: r.unmerged_count,
+                pr_count: r.pr_count,
+            })
+            .collect();
+
+        result.push(RepoGroup {
+            name: "Ungrouped".to_string(),
+            repos: ungrouped_repos,
+        });
+    }
+
+    Ok(result)
 }
 
 #[cfg(target_arch = "wasm32")]

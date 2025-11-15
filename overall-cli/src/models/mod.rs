@@ -108,6 +108,14 @@ impl FromStr for PRState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Group {
+    pub id: i64,
+    pub name: String,
+    pub display_order: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AIAnalysis {
     pub id: i64,
     pub repo_id: String,

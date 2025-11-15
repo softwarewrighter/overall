@@ -222,32 +222,62 @@ fn main() {
                 }
             };
 
-            // Get all repositories
-            let repos = match db.get_all_repositories() {
-                Ok(repos) => repos,
-                Err(e) => {
-                    eprintln!("Error loading repositories: {}", e);
-                    std::process::exit(1);
-                }
-            };
+            // Build JSON structure with groups
+            use serde_json::json;
+            let mut export_data = json!({
+                "groups": [],
+                "ungrouped": []
+            });
 
-            if repos.is_empty() {
-                eprintln!("No repositories found. Run 'overall scan <owner>' first.");
-                std::process::exit(1);
+            // Export all groups
+            let groups = db.get_all_groups().unwrap_or_default();
+            for group in &groups {
+                let repos = db.get_repos_in_group(group.id).unwrap_or_default();
+                let mut group_repos = Vec::new();
+
+                for repo in repos {
+                    let branches = db.get_branches_for_repo(&repo.id).unwrap_or_default();
+                    let prs = db.get_pull_requests_for_repo(&repo.id).unwrap_or_default();
+
+                    let unmerged_count = branches.iter().filter(|b| b.ahead_by > 0 && b.behind_by == 0).count();
+                    let open_pr_count = prs.iter().filter(|pr| matches!(pr.state, overall_cli::models::PRState::Open)).count();
+
+                    group_repos.push(json!({
+                        "id": repo.id,
+                        "owner": repo.owner,
+                        "name": repo.name,
+                        "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
+                        "lastPush": repo.pushed_at.to_rfc3339(),
+                        "branches": branches.iter().map(|b| json!({
+                            "name": b.name,
+                            "sha": b.sha,
+                            "aheadBy": b.ahead_by,
+                            "behindBy": b.behind_by,
+                            "status": b.status.to_string(),
+                            "lastCommitDate": b.last_commit_date.to_rfc3339(),
+                        })).collect::<Vec<_>>(),
+                        "unmergedCount": unmerged_count,
+                        "prCount": open_pr_count,
+                    }));
+                }
+
+                export_data["groups"].as_array_mut().unwrap().push(json!({
+                    "id": group.id,
+                    "name": group.name,
+                    "repos": group_repos
+                }));
             }
 
-            // Build JSON structure with branches
-            use serde_json::json;
-            let mut export_data = Vec::new();
-
-            for repo in repos {
+            // Export ungrouped repositories
+            let ungrouped = db.get_ungrouped_repositories().unwrap_or_default();
+            for repo in ungrouped {
                 let branches = db.get_branches_for_repo(&repo.id).unwrap_or_default();
                 let prs = db.get_pull_requests_for_repo(&repo.id).unwrap_or_default();
 
                 let unmerged_count = branches.iter().filter(|b| b.ahead_by > 0 && b.behind_by == 0).count();
                 let open_pr_count = prs.iter().filter(|pr| matches!(pr.state, overall_cli::models::PRState::Open)).count();
 
-                export_data.push(json!({
+                export_data["ungrouped"].as_array_mut().unwrap().push(json!({
                     "id": repo.id,
                     "owner": repo.owner,
                     "name": repo.name,
@@ -281,7 +311,10 @@ fn main() {
                 std::process::exit(1);
             }
 
-            println!("✓ Exported {} repositories to {}", export_data.len(), output.display());
+            let total_groups = groups.len();
+            let total_ungrouped = export_data["ungrouped"].as_array().unwrap().len();
+            println!("✓ Exported {} groups and {} ungrouped repositories to {}",
+                total_groups, total_ungrouped, output.display());
         }
         Some(Commands::Serve { port }) => {
             println!("Starting web server on port {}...", port);

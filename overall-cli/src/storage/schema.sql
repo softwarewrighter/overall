@@ -46,6 +46,29 @@ CREATE TABLE IF NOT EXISTS pull_requests (
 
 CREATE INDEX IF NOT EXISTS idx_prs_repo_id ON pull_requests(repo_id);
 
+-- Groups table
+CREATE TABLE IF NOT EXISTS groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_groups_display_order ON groups(display_order);
+
+-- Repository group membership table
+CREATE TABLE IF NOT EXISTS repo_groups (
+    repo_id TEXT NOT NULL,
+    group_id INTEGER NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (repo_id, group_id),
+    FOREIGN KEY (repo_id) REFERENCES repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_repo_groups_repo_id ON repo_groups(repo_id);
+CREATE INDEX IF NOT EXISTS idx_repo_groups_group_id ON repo_groups(group_id);
+
 -- Configuration table
 CREATE TABLE IF NOT EXISTS config (
     key TEXT PRIMARY KEY,
