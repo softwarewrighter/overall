@@ -1,6 +1,9 @@
 //! Local SQLite storage
 
-use crate::{models::Repository, Result};
+use crate::{
+    models::{Branch, BranchStatus, PRState, PullRequest, Repository},
+    Result,
+};
 use rusqlite::{params, Connection};
 use std::path::Path;
 
@@ -74,6 +77,116 @@ impl Database {
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
         Ok(repos)
+    }
+
+    pub fn save_branch(&self, branch: &Branch) -> Result<i64> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO branches (repo_id, name, sha, ahead_by, behind_by, status, last_commit_date)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                &branch.repo_id,
+                &branch.name,
+                &branch.sha,
+                branch.ahead_by as i64,
+                branch.behind_by as i64,
+                branch.status.to_string(),
+                &branch.last_commit_date.to_rfc3339(),
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn get_branches_for_repo(&self, repo_id: &str) -> Result<Vec<Branch>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, repo_id, name, sha, ahead_by, behind_by, status, last_commit_date
+             FROM branches
+             WHERE repo_id = ?1
+             ORDER BY name"
+        )?;
+
+        let branches = stmt
+            .query_map([repo_id], |row| {
+                let status_str: String = row.get(6)?;
+                Ok(Branch {
+                    id: row.get(0)?,
+                    repo_id: row.get(1)?,
+                    name: row.get(2)?,
+                    sha: row.get(3)?,
+                    ahead_by: row.get::<_, i64>(4)? as u32,
+                    behind_by: row.get::<_, i64>(5)? as u32,
+                    status: status_str.parse().unwrap_or(BranchStatus::ReadyForPR),
+                    last_commit_date: row.get::<_, String>(7)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(branches)
+    }
+
+    pub fn save_pull_request(&self, pr: &PullRequest) -> Result<i64> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO pull_requests (repo_id, branch_id, number, state, title, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                &pr.repo_id,
+                pr.branch_id,
+                pr.number as i64,
+                pr.state.to_string(),
+                &pr.title,
+                &pr.created_at.to_rfc3339(),
+                &pr.updated_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn get_pull_requests_for_repo(&self, repo_id: &str) -> Result<Vec<PullRequest>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, repo_id, branch_id, number, state, title, created_at, updated_at
+             FROM pull_requests
+             WHERE repo_id = ?1
+             ORDER BY number DESC"
+        )?;
+
+        let prs = stmt
+            .query_map([repo_id], |row| {
+                let state_str: String = row.get(4)?;
+                Ok(PullRequest {
+                    id: row.get(0)?,
+                    repo_id: row.get(1)?,
+                    branch_id: row.get(2)?,
+                    number: row.get::<_, i64>(3)? as u32,
+                    state: state_str.parse().unwrap_or(PRState::Closed),
+                    title: row.get(5)?,
+                    created_at: row.get::<_, String>(6)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    updated_at: row.get::<_, String>(7)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(prs)
+    }
+
+    pub fn clear_branches_for_repo(&self, repo_id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM branches WHERE repo_id = ?1",
+            params![repo_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn clear_pull_requests_for_repo(&self, repo_id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM pull_requests WHERE repo_id = ?1",
+            params![repo_id],
+        )?;
+        Ok(())
     }
 }
 

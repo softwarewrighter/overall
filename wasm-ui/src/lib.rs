@@ -46,7 +46,7 @@ struct BuildInfo {
 #[cfg(target_arch = "wasm32")]
 #[function_component(App)]
 fn app() -> Html {
-    let groups = use_state(get_mock_groups);
+    let groups = use_state(|| Vec::<RepoGroup>::new());
     let active_tab = use_state(|| 0usize);
     let selected_repo = use_state(|| None::<Repository>);
     let build_info = use_state(|| BuildInfo {
@@ -56,6 +56,19 @@ fn app() -> Html {
         git_commit_short: "dev".to_string(),
         git_commit: "development".to_string(),
     });
+
+    // Load repository data on mount
+    {
+        let groups = groups.clone();
+        use_effect_with((), move |_| {
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Ok(loaded_groups) = fetch_repos().await {
+                    groups.set(loaded_groups);
+                }
+            });
+            || ()
+        });
+    }
 
     // Load build info on mount
     {
@@ -480,6 +493,117 @@ fn get_mock_groups() -> Vec<RepoGroup> {
             ],
         },
     ]
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
+    use gloo::net::http::Request;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct RepoJson {
+        id: String,
+        owner: String,
+        name: String,
+        language: String,
+        last_push: String,
+        branches: Vec<BranchJson>,
+        unmerged_count: u32,
+        pr_count: u32,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct BranchJson {
+        name: String,
+        sha: String,
+        ahead_by: u32,
+        behind_by: u32,
+        status: String,
+        last_commit_date: String,
+    }
+
+    let response = Request::get("/repos.json")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch repos: {:?}", e))?;
+
+    let repos_json: Vec<RepoJson> = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse repos: {:?}", e))?;
+
+    // Convert to Repository structs
+    let repos: Vec<Repository> = repos_json
+        .into_iter()
+        .map(|r| Repository {
+            id: r.id,
+            owner: r.owner,
+            name: r.name,
+            language: r.language,
+            last_push: format_relative_time(&r.last_push),
+            branches: r
+                .branches
+                .into_iter()
+                .map(|b| BranchInfo {
+                    name: b.name,
+                    status: b.status,
+                    ahead: b.ahead_by,
+                    behind: b.behind_by,
+                })
+                .collect(),
+            unmerged_count: r.unmerged_count,
+            pr_count: r.pr_count,
+        })
+        .collect();
+
+    // Group repositories (for now, put all in "All Repositories")
+    // In the future, this could be customizable
+    Ok(vec![RepoGroup {
+        name: "All Repositories".to_string(),
+        repos,
+    }])
+}
+
+#[cfg(target_arch = "wasm32")]
+fn format_relative_time(iso_date: &str) -> String {
+    // Simple relative time formatting
+    // In production, use a proper date library
+    use chrono::{DateTime, Utc};
+
+    let parsed = iso_date.parse::<DateTime<Utc>>();
+    if let Ok(date) = parsed {
+        let now = Utc::now();
+        let duration = now.signed_duration_since(date);
+
+        if duration.num_hours() < 1 {
+            let mins = duration.num_minutes();
+            if mins < 1 {
+                return "just now".to_string();
+            }
+            return format!("{} min{} ago", mins, if mins == 1 { "" } else { "s" });
+        } else if duration.num_days() < 1 {
+            let hours = duration.num_hours();
+            return format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" });
+        } else if duration.num_days() < 7 {
+            let days = duration.num_days();
+            return format!("{} day{} ago", days, if days == 1 { "" } else { "s" });
+        } else if duration.num_weeks() < 4 {
+            let weeks = duration.num_weeks();
+            return format!("{} week{} ago", weeks, if weeks == 1 { "" } else { "s" });
+        } else {
+            let months = duration.num_days() / 30;
+            if months < 12 {
+                return format!("{} month{} ago", months, if months == 1 { "" } else { "s" });
+            } else {
+                let years = months / 12;
+                return format!("{} year{} ago", years, if years == 1 { "" } else { "s" });
+            }
+        }
+    }
+
+    iso_date.to_string()
 }
 
 #[cfg(target_arch = "wasm32")]

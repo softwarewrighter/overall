@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Repository {
@@ -36,6 +38,33 @@ pub enum BranchStatus {
     HasConflicts,
 }
 
+impl fmt::Display for BranchStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BranchStatus::ReadyForPR => write!(f, "ReadyForPR"),
+            BranchStatus::InReview => write!(f, "InReview"),
+            BranchStatus::ReadyToMerge => write!(f, "ReadyToMerge"),
+            BranchStatus::NeedsUpdate => write!(f, "NeedsUpdate"),
+            BranchStatus::HasConflicts => write!(f, "HasConflicts"),
+        }
+    }
+}
+
+impl FromStr for BranchStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ReadyForPR" => Ok(BranchStatus::ReadyForPR),
+            "InReview" => Ok(BranchStatus::InReview),
+            "ReadyToMerge" => Ok(BranchStatus::ReadyToMerge),
+            "NeedsUpdate" => Ok(BranchStatus::NeedsUpdate),
+            "HasConflicts" => Ok(BranchStatus::HasConflicts),
+            _ => Err(format!("Unknown branch status: {}", s)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PullRequest {
     pub id: i64,
@@ -53,6 +82,29 @@ pub enum PRState {
     Open,
     Closed,
     Merged,
+}
+
+impl fmt::Display for PRState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PRState::Open => write!(f, "Open"),
+            PRState::Closed => write!(f, "Closed"),
+            PRState::Merged => write!(f, "Merged"),
+        }
+    }
+}
+
+impl FromStr for PRState {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Open" => Ok(PRState::Open),
+            "Closed" => Ok(PRState::Closed),
+            "Merged" => Ok(PRState::Merged),
+            _ => Err(format!("Unknown PR state: {}", s)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
