@@ -13,90 +13,274 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            background: #0d1117;
             color: #c9d1d9;
             min-height: 100vh;
-            padding: 20px;
+            overflow-x: hidden;
         }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
         }
 
-        header {
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 40px 20px;
-            background: rgba(22, 27, 34, 0.6);
-            border-radius: 12px;
-            border: 1px solid #30363d;
+        /* Compact Header */
+        .compact-header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
 
-        header h1 {
-            font-size: 2.5rem;
+        .compact-header h1 {
+            font-size: 1.5rem;
             font-weight: 600;
             background: linear-gradient(135deg, #58a6ff 0%, #79c0ff 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 10px;
         }
 
-        .subtitle {
+        .tagline {
             color: #8b949e;
-            font-size: 1.1rem;
+            font-size: 0.9rem;
         }
 
-        main {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
-            gap: 24px;
-            padding: 0 20px;
-        }
-
-        .repo-card {
+        /* Tabs */
+        .tabs {
             background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 12px;
-            padding: 24px;
-            transition: all 0.3s ease;
-        }
-
-        .repo-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
-            border-color: #58a6ff;
-        }
-
-        .repo-header {
+            border-bottom: 1px solid #30363d;
+            padding: 0 24px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid #21262d;
+            gap: 8px;
+            overflow-x: auto;
         }
 
-        .repo-header h2 {
-            font-size: 1.25rem;
+        .tab {
+            background: transparent;
+            border: none;
+            color: #8b949e;
+            padding: 12px 16px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tab:hover {
+            color: #c9d1d9;
+            background: rgba(110, 118, 129, 0.1);
+        }
+
+        .tab.active {
+            color: #58a6ff;
+            border-bottom-color: #58a6ff;
+        }
+
+        .tab-add {
+            color: #3fb950;
+            font-size: 1.2rem;
+            padding: 8px 12px;
+        }
+
+        .repo-count {
+            background: rgba(110, 118, 129, 0.2);
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.75rem;
             font-weight: 600;
+        }
+
+        .tab.active .repo-count {
+            background: rgba(88, 166, 255, 0.2);
             color: #58a6ff;
         }
 
-        .language {
+        /* Repository List */
+        .repo-list {
+            flex: 1;
+            padding: 24px;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .repo-row {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+
+        .repo-row:hover {
+            background: #1c2128;
+            border-color: #58a6ff;
+            transform: translateX(4px);
+        }
+
+        .repo-info {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+        }
+
+        .repo-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #c9d1d9;
+        }
+
+        .repo-meta {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 0.85rem;
+            color: #8b949e;
+        }
+
+        .language-badge {
             background: #1f6feb;
             color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .repo-status {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
             font-size: 0.85rem;
             font-weight: 500;
         }
 
-        .repo-meta {
-            margin-bottom: 16px;
+        .status-indicator.warning {
+            background: rgba(248, 81, 73, 0.15);
+            color: #f85149;
+            border: 1px solid rgba(248, 81, 73, 0.3);
+        }
+
+        .status-indicator.info {
+            background: rgba(88, 166, 255, 0.15);
+            color: #58a6ff;
+            border: 1px solid rgba(88, 166, 255, 0.3);
+        }
+
+        .status-indicator.success {
+            background: rgba(63, 185, 80, 0.15);
+            color: #3fb950;
+            border: 1px solid rgba(63, 185, 80, 0.3);
+        }
+
+        .status-indicator .icon {
+            font-size: 1rem;
+        }
+
+        .status-indicator .count {
+            font-weight: 600;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
             color: #8b949e;
+            font-size: 1.1rem;
+        }
+
+        /* Modal */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(1, 4, 9, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            max-width: 700px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 1.5rem;
+            color: #58a6ff;
+        }
+
+        .close-button {
+            background: transparent;
+            border: none;
+            color: #8b949e;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px 12px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .close-button:hover {
+            background: rgba(110, 118, 129, 0.2);
+            color: #c9d1d9;
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .repo-detail-meta {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
             font-size: 0.9rem;
+            color: #8b949e;
+        }
+
+        .modal-body h3 {
+            margin: 24px 0 16px 0;
+            color: #c9d1d9;
+            font-size: 1.1rem;
         }
 
         .branch-summary {
@@ -111,9 +295,6 @@
             border-radius: 6px;
             font-size: 0.85rem;
             font-weight: 500;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
         }
 
         .badge.ready {
@@ -134,89 +315,148 @@
             border: 1px solid #da3633;
         }
 
-        .branches {
+        .branches-detail {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 12px;
         }
 
-        .branch {
+        .branch-detail {
             background: #0d1117;
             border: 1px solid #30363d;
             border-left: 3px solid #30363d;
             border-radius: 6px;
             padding: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.2s ease;
         }
 
-        .branch:hover {
-            background: #161b22;
-            border-left-color: #58a6ff;
-        }
-
-        .branch.readyforpr {
+        .branch-detail.readyforpr {
             border-left-color: #3fb950;
         }
 
-        .branch.inreview {
+        .branch-detail.inreview {
             border-left-color: #d29922;
         }
 
-        .branch.needsupdate {
+        .branch-detail.needsupdate {
             border-left-color: #f85149;
         }
 
-        .branch-name {
-            font-weight: 500;
-            color: #c9d1d9;
-            flex: 1;
+        .branch-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
         }
 
-        .branch-status {
+        .branch-name {
+            font-weight: 600;
+            color: #c9d1d9;
+        }
+
+        .branch-status-badge {
             background: rgba(110, 118, 129, 0.2);
             color: #8b949e;
             padding: 4px 8px;
             border-radius: 4px;
-            font-size: 0.8rem;
-            margin: 0 8px;
+            font-size: 0.75rem;
         }
 
-        .branch.readyforpr .branch-status {
+        .branch-detail.readyforpr .branch-status-badge {
             background: rgba(46, 160, 67, 0.2);
             color: #3fb950;
         }
 
-        .branch.inreview .branch-status {
+        .branch-detail.inreview .branch-status-badge {
             background: rgba(187, 128, 9, 0.2);
             color: #d29922;
         }
 
-        .branch.needsupdate .branch-status {
+        .branch-detail.needsupdate .branch-status-badge {
             background: rgba(248, 81, 73, 0.2);
             color: #f85149;
         }
 
-        .branch-diff {
+        .branch-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 0.85rem;
             font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+        }
+
+        .branch-stats .ahead {
+            color: #3fb950;
+        }
+
+        .branch-stats .behind {
+            color: #f85149;
+        }
+
+        /* Footer */
+        .app-footer {
+            background: #161b22;
+            border-top: 1px solid #30363d;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             font-size: 0.85rem;
             color: #8b949e;
-            white-space: nowrap;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .footer-left, .footer-right {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .footer-left a {
+            color: #58a6ff;
+            text-decoration: none;
+        }
+
+        .footer-left a:hover {
+            text-decoration: underline;
+        }
+
+        .separator {
+            color: #30363d;
+        }
+
+        .build-info {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            font-size: 0.8rem;
         }
 
         @media (max-width: 768px) {
-            main {
-                grid-template-columns: 1fr;
+            .compact-header {
+                padding: 12px 16px;
             }
 
-            header h1 {
-                font-size: 2rem;
+            .tabs {
+                padding: 0 16px;
             }
 
-            .repo-card {
+            .repo-list {
                 padding: 16px;
+            }
+
+            .repo-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .repo-status {
+                width: 100%;
+                justify-content: flex-start;
+            }
+
+            .app-footer {
+                flex-direction: column;
+                align-items: flex-start;
             }
         }
     </style>

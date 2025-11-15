@@ -39,7 +39,9 @@ cat > static/build-info.json <<EOF
 {
   "version": "0.1.0",
   "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "git_commit": "$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')",
+  "build_host": "$(hostname)",
+  "git_commit": "$(git rev-parse HEAD 2>/dev/null || echo 'unknown')",
+  "git_commit_short": "$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')",
   "git_branch": "$(git branch --show-current 2>/dev/null || echo 'unknown')"
 }
 EOF
