@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Michael A Wright
+// SPDX-License-Identifier: MIT
+
 use clap::{Parser, Subcommand};
 use overall_cli::github;
 
