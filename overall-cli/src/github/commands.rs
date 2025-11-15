@@ -63,7 +63,7 @@ pub fn list_repos(owner: &str, limit: usize) -> Result<Vec<Repository>> {
     let gh_repos: Vec<GhRepository> = serde_json::from_str(&stdout)?;
 
     // Convert to our Repository model
-    let repos: Vec<Repository> = gh_repos
+    let mut repos: Vec<Repository> = gh_repos
         .into_iter()
         .map(|gh_repo| {
             Ok(Repository {
@@ -80,6 +80,9 @@ pub fn list_repos(owner: &str, limit: usize) -> Result<Vec<Repository>> {
             })
         })
         .collect::<Result<Vec<Repository>>>()?;
+
+    // Sort by pushed_at descending (most recent first)
+    repos.sort_by(|a, b| b.pushed_at.cmp(&a.pushed_at));
 
     Ok(repos)
 }
