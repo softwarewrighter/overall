@@ -116,6 +116,20 @@ pub struct Group {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Commit {
+    pub id: i64,
+    pub branch_id: i64,
+    pub sha: String,
+    pub message: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub authored_date: DateTime<Utc>,
+    pub committer_name: String,
+    pub committer_email: String,
+    pub committed_date: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AIAnalysis {
     pub id: i64,
     pub repo_id: String,
@@ -123,4 +137,25 @@ pub struct AIAnalysis {
     pub focus_branch: Option<String>,
     pub actions: Vec<String>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LocalRepoRoot {
+    pub id: i64,
+    pub path: String,
+    pub enabled: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LocalRepoStatus {
+    pub id: i64,
+    pub repo_id: String,
+    pub local_path: String,
+    pub current_branch: Option<String>,
+    pub uncommitted_files: u32,
+    pub unpushed_commits: u32,
+    pub behind_commits: u32,
+    pub is_dirty: bool,
+    pub last_checked: DateTime<Utc>,
 }

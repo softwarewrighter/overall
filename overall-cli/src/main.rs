@@ -36,7 +36,7 @@ enum Commands {
     /// Start web UI server
     Serve {
         /// Port to listen on
-        #[arg(short, long, default_value = "8080")]
+        #[arg(short, long, default_value = "8459")]
         port: u16,
     },
 }
@@ -117,10 +117,38 @@ fn main() {
                             eprintln!("  Error clearing old branches: {}", e);
                         }
 
-                        // Save branches
+                        // Save branches and fetch commits for unmerged branches
                         for branch in &branches {
-                            if let Err(e) = db.save_branch(branch) {
-                                eprintln!("  Error saving branch {}: {}", branch.name, e);
+                            match db.save_branch(branch) {
+                                Ok(branch_id) => {
+                                    // Fetch commits for branches with unmerged changes
+                                    if branch.ahead_by > 0 {
+                                        print!("  Fetching commits for {}...", branch.name);
+                                        match github::fetch_commits(&repo.id, &branch.name, branch_id) {
+                                            Ok(commits) => {
+                                                println!(" found {}", commits.len());
+
+                                                // Clear old commits for this branch
+                                                if let Err(e) = db.clear_commits_for_branch(branch_id) {
+                                                    eprintln!("    Error clearing old commits: {}", e);
+                                                }
+
+                                                // Save commits
+                                                for commit in &commits {
+                                                    if let Err(e) = db.save_commit(commit) {
+                                                        eprintln!("    Error saving commit {}: {}", &commit.sha[..7], e);
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                eprintln!("\n    Error fetching commits: {}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("  Error saving branch {}: {}", branch.name, e);
+                                }
                             }
                         }
                     }
@@ -248,13 +276,33 @@ fn main() {
                         "name": repo.name,
                         "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
                         "lastPush": repo.pushed_at.to_rfc3339(),
-                        "branches": branches.iter().map(|b| json!({
-                            "name": b.name,
-                            "sha": b.sha,
-                            "aheadBy": b.ahead_by,
-                            "behindBy": b.behind_by,
-                            "status": b.status.to_string(),
-                            "lastCommitDate": b.last_commit_date.to_rfc3339(),
+                        "branches": branches.iter().map(|b| {
+                            let commits = db.get_commits_for_branch(b.id).unwrap_or_default();
+                            json!({
+                                "name": b.name,
+                                "sha": b.sha,
+                                "aheadBy": b.ahead_by,
+                                "behindBy": b.behind_by,
+                                "status": b.status.to_string(),
+                                "lastCommitDate": b.last_commit_date.to_rfc3339(),
+                                "commits": commits.iter().map(|c| json!({
+                                    "sha": c.sha,
+                                    "message": c.message,
+                                    "authorName": c.author_name,
+                                    "authorEmail": c.author_email,
+                                    "authoredDate": c.authored_date.to_rfc3339(),
+                                    "committerName": c.committer_name,
+                                    "committerEmail": c.committer_email,
+                                    "committedDate": c.committed_date.to_rfc3339(),
+                                })).collect::<Vec<_>>(),
+                            })
+                        }).collect::<Vec<_>>(),
+                        "pullRequests": prs.iter().map(|pr| json!({
+                            "number": pr.number,
+                            "title": pr.title,
+                            "state": pr.state.to_string(),
+                            "createdAt": pr.created_at.to_rfc3339(),
+                            "updatedAt": pr.updated_at.to_rfc3339(),
                         })).collect::<Vec<_>>(),
                         "unmergedCount": unmerged_count,
                         "prCount": open_pr_count,
@@ -283,13 +331,33 @@ fn main() {
                     "name": repo.name,
                     "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
                     "lastPush": repo.pushed_at.to_rfc3339(),
-                    "branches": branches.iter().map(|b| json!({
-                        "name": b.name,
-                        "sha": b.sha,
-                        "aheadBy": b.ahead_by,
-                        "behindBy": b.behind_by,
-                        "status": b.status.to_string(),
-                        "lastCommitDate": b.last_commit_date.to_rfc3339(),
+                    "branches": branches.iter().map(|b| {
+                        let commits = db.get_commits_for_branch(b.id).unwrap_or_default();
+                        json!({
+                            "name": b.name,
+                            "sha": b.sha,
+                            "aheadBy": b.ahead_by,
+                            "behindBy": b.behind_by,
+                            "status": b.status.to_string(),
+                            "lastCommitDate": b.last_commit_date.to_rfc3339(),
+                            "commits": commits.iter().map(|c| json!({
+                                "sha": c.sha,
+                                "message": c.message,
+                                "authorName": c.author_name,
+                                "authorEmail": c.author_email,
+                                "authoredDate": c.authored_date.to_rfc3339(),
+                                "committerName": c.committer_name,
+                                "committerEmail": c.committer_email,
+                                "committedDate": c.committed_date.to_rfc3339(),
+                            })).collect::<Vec<_>>(),
+                        })
+                    }).collect::<Vec<_>>(),
+                    "pullRequests": prs.iter().map(|pr| json!({
+                        "number": pr.number,
+                        "title": pr.title,
+                        "state": pr.state.to_string(),
+                        "createdAt": pr.created_at.to_rfc3339(),
+                        "updatedAt": pr.updated_at.to_rfc3339(),
                     })).collect::<Vec<_>>(),
                     "unmergedCount": unmerged_count,
                     "prCount": open_pr_count,
@@ -318,7 +386,23 @@ fn main() {
         }
         Some(Commands::Serve { port }) => {
             println!("Starting web server on port {}...", port);
-            // TODO: Implement web server (Phase 4)
+
+            let db_path = get_db_path();
+            let static_dir = std::path::PathBuf::from("static");
+
+            // Check if static directory exists
+            if !static_dir.exists() {
+                eprintln!("Error: static directory not found");
+                eprintln!("Run './target/release/overall export' first to generate static files");
+                std::process::exit(1);
+            }
+
+            // Run the server using tokio runtime
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            if let Err(e) = runtime.block_on(overall_cli::server::serve(port, db_path, static_dir)) {
+                eprintln!("Server error: {}", e);
+                std::process::exit(1);
+            }
         }
         None => {
             println!("Use --help for usage information");

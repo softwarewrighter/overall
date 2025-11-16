@@ -11,7 +11,9 @@ pub mod analysis;
 pub mod config;
 pub mod error;
 pub mod github;
+pub mod local_git;
 pub mod models;
+pub mod server;
 pub mod storage;
 
 pub use error::{Error, Result};

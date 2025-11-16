@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>GitHub Repository Manager</title>
     <style>
         * {
@@ -287,7 +290,28 @@
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
+            align-items: center;
             margin-bottom: 20px;
+        }
+
+        .btn-create-all-prs {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: rgba(88, 166, 255, 0.15);
+            color: #58a6ff;
+            border: 1px solid #58a6ff;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            margin-left: auto;
+        }
+
+        .btn-create-all-prs:hover {
+            background: rgba(88, 166, 255, 0.25);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(88, 166, 255, 0.3);
         }
 
         .badge {
@@ -344,8 +368,21 @@
         .branch-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             margin-bottom: 8px;
+            gap: 12px;
+        }
+
+        .branch-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .branch-actions {
+            display: flex;
+            gap: 6px;
         }
 
         .branch-name {
@@ -376,6 +413,34 @@
             color: #f85149;
         }
 
+        .branch-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .branch-commit-info {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 0.85rem;
+            color: #8b949e;
+        }
+
+        .branch-commit-info .commit-sha {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            background: rgba(110, 118, 129, 0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #58a6ff;
+            cursor: help;
+        }
+
+        .branch-commit-info .commit-timestamp {
+            color: #8b949e;
+        }
+
         .branch-stats {
             display: flex;
             gap: 12px;
@@ -389,6 +454,245 @@
 
         .branch-stats .behind {
             color: #f85149;
+        }
+
+        .branch-stats .sync-warning {
+            color: #d29922;
+            font-size: 0.8rem;
+        }
+
+        /* Branch Action Buttons */
+        .btn-create-pr,
+        .btn-view-branch {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-decoration: none;
+            border: 1px solid;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn-create-pr {
+            background: rgba(46, 160, 67, 0.1);
+            color: #3fb950;
+            border-color: #3fb950;
+        }
+
+        .btn-create-pr:hover {
+            background: rgba(46, 160, 67, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .btn-view-branch {
+            background: rgba(88, 166, 255, 0.1);
+            color: #58a6ff;
+            border-color: #58a6ff;
+        }
+
+        .btn-view-branch:hover {
+            background: rgba(88, 166, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        /* Commits List */
+        .commits-list {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #30363d;
+        }
+
+        .commits-list h4 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #8b949e;
+            margin-bottom: 8px;
+        }
+
+        .commit-item {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 6px;
+        }
+
+        .commit-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .commit-header {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.75rem;
+            margin-bottom: 4px;
+            flex-wrap: wrap;
+        }
+
+        .commit-sha {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            background: rgba(110, 118, 129, 0.2);
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #79c0ff;
+            cursor: help;
+        }
+
+        .commit-author {
+            color: #8b949e;
+            font-weight: 500;
+        }
+
+        .commit-date {
+            color: #8b949e;
+            margin-left: auto;
+        }
+
+        .commit-message {
+            font-size: 0.85rem;
+            color: #c9d1d9;
+            line-height: 1.4;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Pull Requests Section */
+        .pull-requests-detail {
+            margin-top: 16px;
+        }
+
+        .no-prs {
+            color: #8b949e;
+            font-style: italic;
+            font-size: 0.9rem;
+            padding: 12px 0;
+        }
+
+        .pr-detail {
+            background: #0d1117;
+            border-left: 3px solid #30363d;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .pr-detail:hover {
+            background: #161b22;
+            transform: translateX(4px);
+        }
+
+        .pr-detail.open {
+            border-left-color: #3fb950;
+        }
+
+        .pr-detail.closed {
+            border-left-color: #f85149;
+        }
+
+        .pr-detail.merged {
+            border-left-color: #a371f7;
+        }
+
+        .pr-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .pr-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            flex-wrap: wrap;
+        }
+
+        .pr-number {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            background: rgba(110, 118, 129, 0.2);
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #79c0ff;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .pr-title {
+            color: #c9d1d9;
+            font-weight: 500;
+            font-size: 0.9rem;
+            flex: 1;
+        }
+
+        .pr-state-badge {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pr-state-badge.open {
+            background: rgba(46, 160, 67, 0.15);
+            color: #3fb950;
+            border: 1px solid #3fb950;
+        }
+
+        .pr-state-badge.closed {
+            background: rgba(248, 81, 73, 0.15);
+            color: #f85149;
+            border: 1px solid #f85149;
+        }
+
+        .pr-state-badge.merged {
+            background: rgba(163, 113, 247, 0.15);
+            color: #a371f7;
+            border: 1px solid #a371f7;
+        }
+
+        .pr-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-view-pr {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-decoration: none;
+            border: 1px solid #58a6ff;
+            background: rgba(88, 166, 255, 0.1);
+            color: #58a6ff;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .btn-view-pr:hover {
+            background: rgba(88, 166, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .pr-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 0.75rem;
+            color: #8b949e;
+        }
+
+        .pr-created,
+        .pr-updated {
+            display: flex;
+            align-items: center;
         }
 
         /* Footer */
@@ -685,8 +989,9 @@
 </head>
 <body>
     <script type="module">
-        import init from './wasm/wasm_ui.js';
-        init();
+        // Cache busting: append timestamp to force reload of WASM files
+        const cacheBuster = new Date().getTime();
+        import(`./wasm/wasm_ui.js?v=${cacheBuster}`).then(module => module.default());
     </script>
 </body>
 </html>

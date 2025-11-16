@@ -1,5 +1,5 @@
 use crate::{
-    models::{Branch, BranchStatus, PRState, PullRequest, Repository},
+    models::{Branch, BranchStatus, Commit, PRState, PullRequest, Repository},
     Error, Result,
 };
 use chrono::{DateTime, Utc};
@@ -298,6 +298,82 @@ fn compare_branches(repo_id: &str, base: &str, head: &str) -> Result<(u32, u32)>
     Ok((comparison.ahead_by, comparison.behind_by))
 }
 
+// Commit-related structures
+#[derive(Debug, Deserialize)]
+struct GhCommitFull {
+    sha: String,
+    commit: GhCommitFullInfo,
+}
+
+#[derive(Debug, Deserialize)]
+struct GhCommitFullInfo {
+    message: String,
+    author: GhCommitAuthor,
+    committer: GhCommitCommitter,
+}
+
+#[derive(Debug, Deserialize)]
+struct GhCommitAuthor {
+    name: String,
+    email: String,
+    date: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GhCommitCommitter {
+    name: String,
+    email: String,
+    date: String,
+}
+
+pub fn fetch_commits(repo_id: &str, branch_name: &str, branch_id: i64) -> Result<Vec<Commit>> {
+    // Fetch commits for the branch
+    let output = Command::new("gh")
+        .args([
+            "api",
+            &format!("repos/{}/commits?sha={}", repo_id, branch_name),
+            "--paginate",
+        ])
+        .output()
+        .map_err(|e| Error::GitHubCLI(format!("Failed to execute gh CLI: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(Error::GitHubCLI(format!(
+            "Failed to fetch commits: {}",
+            stderr
+        )));
+    }
+
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|e| Error::GitHubCLI(format!("Invalid UTF-8 in response: {}", e)))?;
+
+    let gh_commits: Vec<GhCommitFull> = serde_json::from_str(&stdout)?;
+
+    // Convert to our Commit model (limit to first 50 commits to avoid overwhelming the UI)
+    let commits: Vec<Commit> = gh_commits
+        .into_iter()
+        .take(50)
+        .enumerate()
+        .map(|(idx, gh_commit)| {
+            Ok(Commit {
+                id: idx as i64,
+                branch_id,
+                sha: gh_commit.sha,
+                message: gh_commit.commit.message,
+                author_name: gh_commit.commit.author.name,
+                author_email: gh_commit.commit.author.email,
+                authored_date: parse_github_timestamp(&gh_commit.commit.author.date)?,
+                committer_name: gh_commit.commit.committer.name,
+                committer_email: gh_commit.commit.committer.email,
+                committed_date: parse_github_timestamp(&gh_commit.commit.committer.date)?,
+            })
+        })
+        .collect::<Result<Vec<Commit>>>()?;
+
+    Ok(commits)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -421,4 +497,59 @@ pub fn classify_branch_status(
         Some(_pr) if _pr.state == PRState::Merged => BranchStatus::ReadyForPR, // Stale branch
         _ => BranchStatus::ReadyForPR, // No PR or no need for PR
     }
+}
+
+/// Create a pull request for a branch
+/// Returns the PR URL on success
+pub fn create_pull_request(
+    repo_id: &str,
+    branch_name: &str,
+    title: Option<&str>,
+    body: Option<&str>,
+) -> Result<String> {
+    // Validate repo_id format
+    if !repo_id.contains('/') {
+        return Err(Error::GitHubCLI(format!(
+            "Invalid repo_id format: {}. Expected owner/repo",
+            repo_id
+        )));
+    }
+
+    // Build gh pr create command
+    let mut args = vec!["pr", "create", "--repo", repo_id, "--head", branch_name];
+
+    // Use provided title or generate from branch name
+    let default_title = branch_name.replace(['-', '_'], " ");
+    let pr_title = title.unwrap_or(&default_title);
+    args.push("--title");
+    args.push(pr_title);
+
+    // Add body if provided
+    let default_body = "Created via Overall";
+    let pr_body = body.unwrap_or(default_body);
+    args.push("--body");
+    args.push(pr_body);
+
+    // Execute command
+    let output = Command::new("gh")
+        .args(&args)
+        .output()
+        .map_err(|e| Error::GitHubCLI(format!("Failed to execute gh CLI: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(Error::GitHubCLI(format!(
+            "Failed to create PR for branch {}: {}",
+            branch_name, stderr
+        )));
+    }
+
+    // Parse stdout to get PR URL
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|e| Error::GitHubCLI(format!("Invalid UTF-8 in response: {}", e)))?;
+
+    // gh pr create outputs the PR URL on stdout
+    let pr_url = stdout.trim().to_string();
+
+    Ok(pr_url)
 }

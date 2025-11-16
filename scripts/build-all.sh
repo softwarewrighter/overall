@@ -4,6 +4,11 @@ set -euo pipefail
 echo "Building overall project..."
 echo
 
+# Kill any server on port 8459 (reserved for this project)
+echo "Stopping server on port 8459..."
+lsof -ti:8459 | xargs kill -9 2>/dev/null || true
+echo
+
 # Build backend CLI (release mode)
 echo "Building Rust CLI (release)..."
 cargo build --release -p overall-cli

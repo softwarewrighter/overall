@@ -1,7 +1,7 @@
 //! Local SQLite storage
 
 use crate::{
-    models::{Branch, BranchStatus, Group, PRState, PullRequest, Repository},
+    models::{Branch, BranchStatus, Commit, Group, PRState, PullRequest, Repository},
     Result,
 };
 use chrono::Utc;
@@ -190,6 +190,65 @@ impl Database {
         Ok(())
     }
 
+    pub fn save_commit(&self, commit: &Commit) -> Result<i64> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO commits (branch_id, sha, message, author_name, author_email, authored_date, committer_name, committer_email, committed_date)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                commit.branch_id,
+                &commit.sha,
+                &commit.message,
+                &commit.author_name,
+                &commit.author_email,
+                &commit.authored_date.to_rfc3339(),
+                &commit.committer_name,
+                &commit.committer_email,
+                &commit.committed_date.to_rfc3339(),
+            ],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn get_commits_for_branch(&self, branch_id: i64) -> Result<Vec<Commit>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, branch_id, sha, message, author_name, author_email, authored_date, committer_name, committer_email, committed_date
+             FROM commits
+             WHERE branch_id = ?1
+             ORDER BY committed_date DESC"
+        )?;
+
+        let commits = stmt
+            .query_map([branch_id], |row| {
+                Ok(Commit {
+                    id: row.get(0)?,
+                    branch_id: row.get(1)?,
+                    sha: row.get(2)?,
+                    message: row.get(3)?,
+                    author_name: row.get(4)?,
+                    author_email: row.get(5)?,
+                    authored_date: row.get::<_, String>(6)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    committer_name: row.get(7)?,
+                    committer_email: row.get(8)?,
+                    committed_date: row.get::<_, String>(9)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(commits)
+    }
+
+    pub fn clear_commits_for_branch(&self, branch_id: i64) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM commits WHERE branch_id = ?1",
+            params![branch_id],
+        )?;
+        Ok(())
+    }
+
     // Group management methods
     pub fn create_group(&self, name: &str, display_order: i32) -> Result<i64> {
         self.conn.execute(
@@ -319,6 +378,160 @@ impl Database {
             params![new_name, group_id],
         )?;
         Ok(())
+    }
+
+    pub fn move_repo_to_group(&self, repo_id: &str, target_group_id: i64) -> Result<()> {
+        // Remove from all groups first
+        self.conn.execute(
+            "DELETE FROM repo_groups WHERE repo_id = ?1",
+            params![repo_id],
+        )?;
+
+        // Add to target group
+        self.conn.execute(
+            "INSERT INTO repo_groups (repo_id, group_id, added_at) VALUES (?1, ?2, ?3)",
+            params![repo_id, target_group_id, Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_repo_from_all_groups(&self, repo_id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM repo_groups WHERE repo_id = ?1",
+            params![repo_id],
+        )?;
+        Ok(())
+    }
+
+    // Local repository root paths management
+    pub fn add_local_repo_root(&self, path: &str) -> Result<i64> {
+        self.conn.execute(
+            "INSERT INTO local_repo_roots (path, enabled, created_at)
+             VALUES (?1, ?2, ?3)",
+            params![path, 1, Utc::now().to_rfc3339()],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    pub fn get_all_local_repo_roots(&self) -> Result<Vec<crate::models::LocalRepoRoot>> {
+        use crate::models::LocalRepoRoot;
+
+        let mut stmt = self.conn.prepare(
+            "SELECT id, path, enabled, created_at
+             FROM local_repo_roots
+             ORDER BY created_at DESC"
+        )?;
+
+        let roots = stmt
+            .query_map([], |row| {
+                Ok(LocalRepoRoot {
+                    id: row.get(0)?,
+                    path: row.get(1)?,
+                    enabled: row.get::<_, i32>(2)? != 0,
+                    created_at: row.get::<_, String>(3)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(roots)
+    }
+
+    pub fn remove_local_repo_root(&self, id: i64) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM local_repo_roots WHERE id = ?1",
+            params![id],
+        )?;
+        Ok(())
+    }
+
+    pub fn toggle_local_repo_root(&self, id: i64, enabled: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE local_repo_roots SET enabled = ?1 WHERE id = ?2",
+            params![enabled as i32, id],
+        )?;
+        Ok(())
+    }
+
+    // Local repository status management
+    pub fn save_local_repo_status(&self, status: &crate::models::LocalRepoStatus) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO local_repo_status
+             (repo_id, local_path, current_branch, uncommitted_files, unpushed_commits, behind_commits, is_dirty, last_checked)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                &status.repo_id,
+                &status.local_path,
+                &status.current_branch,
+                status.uncommitted_files as i64,
+                status.unpushed_commits as i64,
+                status.behind_commits as i64,
+                status.is_dirty as i32,
+                &status.last_checked.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_local_repo_status(&self, repo_id: &str) -> Result<Option<crate::models::LocalRepoStatus>> {
+        use crate::models::LocalRepoStatus;
+
+        let mut stmt = self.conn.prepare(
+            "SELECT id, repo_id, local_path, current_branch, uncommitted_files, unpushed_commits, behind_commits, is_dirty, last_checked
+             FROM local_repo_status
+             WHERE repo_id = ?1"
+        )?;
+
+        let mut rows = stmt.query(params![repo_id])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(Some(LocalRepoStatus {
+                id: row.get(0)?,
+                repo_id: row.get(1)?,
+                local_path: row.get(2)?,
+                current_branch: row.get(3)?,
+                uncommitted_files: row.get::<_, i64>(4)? as u32,
+                unpushed_commits: row.get::<_, i64>(5)? as u32,
+                behind_commits: row.get::<_, i64>(6)? as u32,
+                is_dirty: row.get::<_, i32>(7)? != 0,
+                last_checked: row.get::<_, String>(8)?.parse().map_err(|_| {
+                    rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                })?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn get_all_local_repo_statuses(&self) -> Result<Vec<crate::models::LocalRepoStatus>> {
+        use crate::models::LocalRepoStatus;
+
+        let mut stmt = self.conn.prepare(
+            "SELECT id, repo_id, local_path, current_branch, uncommitted_files, unpushed_commits, behind_commits, is_dirty, last_checked
+             FROM local_repo_status
+             ORDER BY last_checked DESC"
+        )?;
+
+        let statuses = stmt
+            .query_map([], |row| {
+                Ok(LocalRepoStatus {
+                    id: row.get(0)?,
+                    repo_id: row.get(1)?,
+                    local_path: row.get(2)?,
+                    current_branch: row.get(3)?,
+                    uncommitted_files: row.get::<_, i64>(4)? as u32,
+                    unpushed_commits: row.get::<_, i64>(5)? as u32,
+                    behind_commits: row.get::<_, i64>(6)? as u32,
+                    is_dirty: row.get::<_, i32>(7)? != 0,
+                    last_checked: row.get::<_, String>(8)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(statuses)
     }
 }
 

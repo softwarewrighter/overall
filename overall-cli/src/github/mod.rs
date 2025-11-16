@@ -3,7 +3,7 @@
 pub mod commands;
 
 use crate::{
-    models::{Branch, BranchStatus, PullRequest, Repository},
+    models::{Branch, BranchStatus, Commit, PullRequest, Repository},
     Result,
 };
 
@@ -22,6 +22,11 @@ pub fn fetch_pull_requests(repo_id: &str) -> Result<Vec<PullRequest>> {
     commands::fetch_pull_requests(repo_id)
 }
 
+/// Fetch commits for a specific branch
+pub fn fetch_commits(repo_id: &str, branch_name: &str, branch_id: i64) -> Result<Vec<Commit>> {
+    commands::fetch_commits(repo_id, branch_name, branch_id)
+}
+
 /// Classify branch status based on PR state
 pub fn classify_branch_status(
     branch: &Branch,
@@ -29,6 +34,17 @@ pub fn classify_branch_status(
     default_branch: &str,
 ) -> BranchStatus {
     commands::classify_branch_status(branch, prs, default_branch)
+}
+
+/// Create a pull request for a branch
+/// Returns the PR URL on success
+pub fn create_pull_request(
+    repo_id: &str,
+    branch_name: &str,
+    title: Option<&str>,
+    body: Option<&str>,
+) -> Result<String> {
+    commands::create_pull_request(repo_id, branch_name, title, body)
 }
 
 #[cfg(test)]

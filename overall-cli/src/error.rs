@@ -8,6 +8,9 @@ pub enum Error {
     #[error("GitHub API error: {status} - {message}")]
     GitHubAPI { status: u16, message: String },
 
+    #[error("Git command error: {0}")]
+    GitCommand(String),
+
     #[error("Database error: {0}")]
     Database(#[from] rusqlite::Error),
 

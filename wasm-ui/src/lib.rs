@@ -16,6 +16,7 @@ struct Repository {
     language: String,
     last_push: String,
     branches: Vec<BranchInfo>,
+    pull_requests: Vec<PullRequestInfo>,
     unmerged_count: u32,
     pr_count: u32,
 }
@@ -24,14 +25,38 @@ struct Repository {
 #[derive(Clone, PartialEq)]
 struct BranchInfo {
     name: String,
+    sha: String,
     status: String,
     ahead: u32,
     behind: u32,
+    last_commit_date: String,
+    commits: Vec<CommitInfo>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, PartialEq)]
+struct CommitInfo {
+    sha: String,
+    message: String,
+    author_name: String,
+    author_email: String,
+    authored_date: String,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, PartialEq)]
+struct PullRequestInfo {
+    number: u32,
+    title: String,
+    state: String,
+    created_at: String,
+    updated_at: String,
 }
 
 #[cfg(target_arch = "wasm32")]
 #[derive(Clone, PartialEq)]
 struct RepoGroup {
+    id: Option<i64>, // None for ungrouped
     name: String,
     repos: Vec<Repository>,
 }
@@ -47,12 +72,38 @@ struct BuildInfo {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[derive(Clone, PartialEq)]
+struct LocalRepoRoot {
+    id: i64,
+    path: String,
+    enabled: bool,
+    created_at: String,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, PartialEq)]
+struct LocalRepoStatus {
+    id: i64,
+    repo_id: String,
+    local_path: String,
+    current_branch: Option<String>,
+    uncommitted_files: u32,
+    unpushed_commits: u32,
+    behind_commits: u32,
+    is_dirty: bool,
+    last_checked: String,
+}
+
+#[cfg(target_arch = "wasm32")]
 #[function_component(App)]
 fn app() -> Html {
     let groups = use_state(|| Vec::<RepoGroup>::new());
     let active_tab = use_state(|| 0usize);
     let selected_repo = use_state(|| None::<Repository>);
     let show_add_dialog = use_state(|| false);
+    let show_settings = use_state(|| false);
+    let dragged_repo_id = use_state(|| None::<String>);
+    let local_repo_statuses = use_state(|| std::collections::HashMap::<String, LocalRepoStatus>::new());
     let build_info = use_state(|| BuildInfo {
         version: "0.1.0".to_string(),
         build_date: "Loading...".to_string(),
@@ -81,6 +132,23 @@ fn app() -> Html {
             wasm_bindgen_futures::spawn_local(async move {
                 if let Ok(info) = fetch_build_info().await {
                     build_info.set(info);
+                }
+            });
+            || ()
+        });
+    }
+
+    // Load local repo statuses on mount
+    {
+        let local_repo_statuses = local_repo_statuses.clone();
+        use_effect_with((), move |_| {
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Ok(statuses) = fetch_local_repo_statuses().await {
+                    let status_map: std::collections::HashMap<String, LocalRepoStatus> = statuses
+                        .into_iter()
+                        .map(|s| (s.repo_id.clone(), s))
+                        .collect();
+                    local_repo_statuses.set(status_map);
                 }
             });
             || ()
@@ -122,12 +190,61 @@ fn app() -> Html {
         })
     };
 
+    let on_open_settings = {
+        let show_settings = show_settings.clone();
+        Callback::from(move |_| {
+            show_settings.set(true);
+        })
+    };
+
+    let on_close_settings = {
+        let show_settings = show_settings.clone();
+        Callback::from(move |_| {
+            show_settings.set(false);
+        })
+    };
+
+    let on_drag_start = {
+        let dragged_repo_id = dragged_repo_id.clone();
+        Callback::from(move |repo_id: String| {
+            dragged_repo_id.set(Some(repo_id));
+        })
+    };
+
+    let on_drop_to_group = {
+        let dragged_repo_id = dragged_repo_id.clone();
+        let groups_state = groups.clone();
+        Callback::from(move |(_group_idx, target_group_id): (usize, Option<i64>)| {
+            if let Some(repo_id) = (*dragged_repo_id).clone() {
+                let groups_state = groups_state.clone();
+                let dragged_repo_id = dragged_repo_id.clone();
+
+                wasm_bindgen_futures::spawn_local(async move {
+                    if move_repo_to_group(&repo_id, target_group_id).await.is_ok() {
+                        // Reload data after successful move
+                        if let Ok(loaded_groups) = fetch_repos().await {
+                            groups_state.set(loaded_groups);
+                        }
+                    }
+                    dragged_repo_id.set(None);
+                });
+            }
+        })
+    };
+
     html! {
         <>
             <div class="app-container">
                 <header class="compact-header">
-                    <h1>{ "Overall" }</h1>
-                    <span class="tagline">{ "Repository Manager" }</span>
+                    <div class="header-left">
+                        <h1>{ "Overall" }</h1>
+                        <span class="tagline">{ "Repository Manager" }</span>
+                    </div>
+                    <div class="header-right">
+                        <button class="btn-settings" onclick={on_open_settings} title="Local Repository Settings">
+                            { "⚙️" }
+                        </button>
+                    </div>
                 </header>
 
                 <nav class="tabs">
@@ -136,10 +253,28 @@ fn app() -> Html {
                             let on_tab_click = on_tab_click.clone();
                             Callback::from(move |_| on_tab_click.emit(idx))
                         };
+
+                        let ondragover = {
+                            Callback::from(move |e: DragEvent| {
+                                e.prevent_default(); // Allow drop
+                            })
+                        };
+
+                        let ondrop = {
+                            let on_drop_to_group = on_drop_to_group.clone();
+                            let group_id = group.id;
+                            Callback::from(move |e: DragEvent| {
+                                e.prevent_default();
+                                on_drop_to_group.emit((idx, group_id));
+                            })
+                        };
+
                         html! {
                             <button
                                 class={classes!("tab", (*active_tab == idx).then_some("active"))}
                                 {onclick}
+                                {ondragover}
+                                {ondrop}
                             >
                                 { &group.name }
                                 <span class="repo-count">{ group.repos.len() }</span>
@@ -159,8 +294,10 @@ fn app() -> Html {
                                         let repo = repo.clone();
                                         Callback::from(move |_| on_repo_click.emit(repo.clone()))
                                     };
+                                    let on_drag_start = on_drag_start.clone();
+                                    let local_status = local_repo_statuses.get(&repo.id).cloned();
                                     html! {
-                                        <RepoRow repo={repo.clone()} {onclick} />
+                                        <RepoRow repo={repo.clone()} {onclick} {on_drag_start} {local_status} />
                                     }
                                 })}
                             </>
@@ -201,6 +338,12 @@ fn app() -> Html {
             } else {
                 html! {}
             }}
+
+            { if *show_settings {
+                html! { <SettingsDialog on_close={on_close_settings} /> }
+            } else {
+                html! {}
+            }}
         </>
     }
 }
@@ -210,6 +353,8 @@ fn app() -> Html {
 struct RepoRowProps {
     repo: Repository,
     onclick: Callback<()>,
+    on_drag_start: Callback<String>,
+    local_status: Option<LocalRepoStatus>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -221,8 +366,17 @@ fn repo_row(props: &RepoRowProps) -> Html {
         Callback::from(move |_| onclick.emit(()))
     };
 
+    let ondragstart = {
+        let repo_id = repo.id.clone();
+        let on_drag_start = props.on_drag_start.clone();
+        Callback::from(move |_e: DragEvent| {
+            on_drag_start.emit(repo_id.clone());
+            // Note: DataTransfer is handled by browser, we just track the repo_id in state
+        })
+    };
+
     html! {
-        <div class="repo-row" {onclick}>
+        <div class="repo-row" draggable="true" {ondragstart} {onclick}>
             <div class="repo-info">
                 <span class="repo-name">{ &repo.id }</span>
                 <span class="repo-meta">
@@ -231,6 +385,34 @@ fn repo_row(props: &RepoRowProps) -> Html {
                 </span>
             </div>
             <div class="repo-status">
+                { if let Some(status) = &props.local_status {
+                    if status.uncommitted_files > 0 {
+                        html! {
+                            <span class="status-indicator local-uncommitted" title={format!("{} uncommitted files", status.uncommitted_files)}>
+                                <span class="icon">{ "📝" }</span>
+                                <span class="count">{ status.uncommitted_files }</span>
+                            </span>
+                        }
+                    } else if status.unpushed_commits > 0 {
+                        html! {
+                            <span class="status-indicator local-unpushed" title={format!("{} unpushed commits", status.unpushed_commits)}>
+                                <span class="icon">{ "⬆️" }</span>
+                                <span class="count">{ status.unpushed_commits }</span>
+                            </span>
+                        }
+                    } else if status.behind_commits > 0 {
+                        html! {
+                            <span class="status-indicator local-behind" title={format!("{} commits behind", status.behind_commits)}>
+                                <span class="icon">{ "⬇️" }</span>
+                                <span class="count">{ status.behind_commits }</span>
+                            </span>
+                        }
+                    } else {
+                        html! {}
+                    }
+                } else {
+                    html! {}
+                }}
                 { if repo.unmerged_count > 0 {
                     html! {
                         <span class="status-indicator warning" title="Unmerged branches">
@@ -251,7 +433,7 @@ fn repo_row(props: &RepoRowProps) -> Html {
                 } else {
                     html! {}
                 }}
-                { if repo.unmerged_count == 0 && repo.pr_count == 0 {
+                { if repo.unmerged_count == 0 && repo.pr_count == 0 && props.local_status.as_ref().map_or(true, |s| !s.is_dirty) {
                     html! {
                         <span class="status-indicator success" title="No pending work">
                             <span class="icon">{ "✓" }</span>
@@ -331,17 +513,93 @@ fn repo_detail_modal(props: &RepoDetailModalProps) -> Html {
                         if needs_update > 0 {
                             <span class="badge update">{ format!("{} Needs Update", needs_update) }</span>
                         }
+
+                        // Add "Create All PRs" button if there are branches ready for PR
+                        if ready_for_pr > 0 {
+                            {{
+                                let repo_id_for_all_prs = repo.id.clone();
+                                let on_create_all_prs = {
+                                    Callback::from(move |_| {
+                                        let repo_id = repo_id_for_all_prs.clone();
+
+                                        wasm_bindgen_futures::spawn_local(async move {
+                                            match create_all_pull_requests(&repo_id).await {
+                                                Ok(message) => {
+                                                    web_sys::console::log_1(&format!("Success: {}", message).into());
+                                                }
+                                                Err(e) => {
+                                                    web_sys::console::error_1(&format!("Failed to create PRs: {}", e).into());
+                                                }
+                                            }
+                                        });
+                                    })
+                                };
+
+                                html! {
+                                    <button onclick={on_create_all_prs} class="btn-create-all-prs" title="Create Pull Requests for all branches with unmerged work">
+                                        { "Create All PRs" }
+                                    </button>
+                                }
+                            }}
+                        }
                     </div>
 
-                    <h3>{ "Branches" }</h3>
+                    <h3>{ format!("Branches ({})", repo.branches.len()) }</h3>
                     <div class="branches-detail">
-                        { for repo.branches.iter().map(|branch| html! {
+                        { for repo.branches.iter().map(|branch| {
+                            let has_unmerged_work = branch.ahead > 0; // Show button if branch has commits ahead
+                            let needs_sync = branch.behind > 0;
+                            let repo_full_name = repo.id.clone();
+                            let branch_name = branch.name.clone();
+
+                            html! {
                             <div class={classes!("branch-detail", branch.status.to_lowercase())}>
                                 <div class="branch-header">
-                                    <span class="branch-name">{ &branch.name }</span>
-                                    <span class="branch-status-badge">{ &branch.status }</span>
+                                    <div class="branch-info">
+                                        <span class="branch-name">{ &branch.name }</span>
+                                        <span class="branch-status-badge">{ &branch.status }</span>
+                                    </div>
+                                    <div class="branch-actions">
+                                        {{
+                                            let repo_id_for_pr = repo_full_name.clone();
+                                            let branch_name_for_pr = branch_name.clone();
+
+                                            let on_create_pr = {
+                                                Callback::from(move |_| {
+                                                    let repo_id = repo_id_for_pr.clone();
+                                                    let branch_name = branch_name_for_pr.clone();
+
+                                                    wasm_bindgen_futures::spawn_local(async move {
+                                                        if let Err(e) = create_pull_request(&repo_id, &branch_name).await {
+                                                            web_sys::console::error_1(&format!("Failed to create PR: {}", e).into());
+                                                        }
+                                                    });
+                                                })
+                                            };
+
+                                            html! {
+                                                <>
+                                                { if has_unmerged_work {
+                                                    html! {
+                                                        <button onclick={on_create_pr} class="btn-create-pr" title="Create Pull Request">
+                                                            { "Create PR" }
+                                                        </button>
+                                                    }
+                                                } else {
+                                                    html! {}
+                                                }}
+                                                </>
+                                            }
+                                        }}
+                                    </div>
                                 </div>
-                                if branch.ahead > 0 || branch.behind > 0 {
+                                <div class="branch-meta">
+                                    <div class="branch-commit-info">
+                                        <span class="commit-sha" title={branch.sha.clone()}>
+                                            { if branch.sha.len() > 7 { &branch.sha[..7] } else { &branch.sha } }
+                                        </span>
+                                        <span class="commit-timestamp">{ &branch.last_commit_date }</span>
+                                    </div>
                                     <div class="branch-stats">
                                         { if branch.ahead > 0 {
                                             html! { <span class="ahead">{ format!("+{} ahead", branch.ahead) }</span> }
@@ -353,10 +611,83 @@ fn repo_detail_modal(props: &RepoDetailModalProps) -> Html {
                                         } else {
                                             html! {}
                                         }}
+                                        { if needs_sync {
+                                            html! { <span class="sync-warning">{ "⚠️ Needs sync with main" }</span> }
+                                        } else {
+                                            html! {}
+                                        }}
                                     </div>
-                                }
+                                </div>
+                                { if !branch.commits.is_empty() {
+                                    html! {
+                                        <div class="commits-list">
+                                            <h4>{ format!("Commits ({})", branch.commits.len()) }</h4>
+                                            { for branch.commits.iter().map(|commit| {
+                                                let short_sha = if commit.sha.len() > 7 { &commit.sha[..7] } else { &commit.sha };
+                                                let first_line = commit.message.lines().next().unwrap_or(&commit.message);
+                                                html! {
+                                                    <div class="commit-item">
+                                                        <div class="commit-header">
+                                                            <span class="commit-sha" title={commit.sha.clone()}>{ short_sha }</span>
+                                                            <span class="commit-author">{ &commit.author_name }</span>
+                                                            <span class="commit-date">{ &commit.authored_date }</span>
+                                                        </div>
+                                                        <div class="commit-message">{ first_line }</div>
+                                                    </div>
+                                                }
+                                            })}
+                                        </div>
+                                    }
+                                } else {
+                                    html! {}
+                                }}
                             </div>
+                            }
                         })}
+                    </div>
+
+                    <h3>{ format!("Pull Requests ({})", repo.pull_requests.len()) }</h3>
+                    <div class="pull-requests-detail">
+                        { if repo.pull_requests.is_empty() {
+                            html! {
+                                <div class="no-prs">{ "No open pull requests" }</div>
+                            }
+                        } else {
+                            html! {
+                                { for repo.pull_requests.iter().map(|pr| {
+                                    let repo_full_name = repo.id.clone();
+                                    let pr_number = pr.number;
+
+                                    html! {
+                                        <div class={classes!("pr-detail", pr.state.to_lowercase())}>
+                                            <div class="pr-header">
+                                                <div class="pr-info">
+                                                    <span class="pr-number">{ format!("#{}", pr.number) }</span>
+                                                    <span class="pr-title">{ &pr.title }</span>
+                                                    <span class={classes!("pr-state-badge", pr.state.to_lowercase())}>
+                                                        { &pr.state }
+                                                    </span>
+                                                </div>
+                                                <div class="pr-actions">
+                                                    {{
+                                                        let pr_url = format!("https://github.com/{}/pull/{}", repo_full_name, pr_number);
+                                                        html! {
+                                                            <a href={pr_url} target="_blank" class="btn-view-pr" title="View on GitHub">
+                                                                { "View PR" }
+                                                            </a>
+                                                        }
+                                                    }}
+                                                </div>
+                                            </div>
+                                            <div class="pr-meta">
+                                                <span class="pr-created">{ format!("Created: {}", &pr.created_at) }</span>
+                                                <span class="pr-updated">{ format!("Updated: {}", &pr.updated_at) }</span>
+                                            </div>
+                                        </div>
+                                    }
+                                })}
+                            }
+                        }}
                     </div>
                 </div>
             </div>
@@ -670,9 +1001,152 @@ fn add_repo_dialog(props: &AddRepoDialogProps) -> Html {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[derive(Properties, PartialEq)]
+struct SettingsDialogProps {
+    on_close: Callback<()>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[function_component(SettingsDialog)]
+fn settings_dialog(props: &SettingsDialogProps) -> Html {
+    let local_repo_roots = use_state(|| Vec::<LocalRepoRoot>::new());
+    let new_path = use_state(|| String::new());
+
+    // Load local repo roots on mount
+    {
+        let local_repo_roots = local_repo_roots.clone();
+        use_effect_with((), move |_| {
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Ok(roots) = fetch_local_repo_roots().await {
+                    local_repo_roots.set(roots);
+                }
+            });
+            || ()
+        });
+    }
+
+    let on_backdrop_click = {
+        let on_close = props.on_close.clone();
+        Callback::from(move |_| on_close.emit(()))
+    };
+
+    let on_modal_click = Callback::from(|e: MouseEvent| {
+        e.stop_propagation();
+    });
+
+    let on_close_button_click = {
+        let on_close = props.on_close.clone();
+        Callback::from(move |_| on_close.emit(()))
+    };
+
+    let on_path_input = {
+        let new_path = new_path.clone();
+        Callback::from(move |e: InputEvent| {
+            let input: web_sys::HtmlInputElement = e.target_unchecked_into();
+            new_path.set(input.value());
+        })
+    };
+
+    let on_add_path = {
+        let new_path = new_path.clone();
+        let local_repo_roots = local_repo_roots.clone();
+        Callback::from(move |_| {
+            let path = (*new_path).clone();
+            if path.trim().is_empty() {
+                return;
+            }
+            let new_path = new_path.clone();
+            let local_repo_roots = local_repo_roots.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                if add_local_repo_root(&path).await.is_ok() {
+                    new_path.set(String::new());
+                    if let Ok(roots) = fetch_local_repo_roots().await {
+                        local_repo_roots.set(roots);
+                    }
+                }
+            });
+        })
+    };
+
+    let on_scan = {
+        Callback::from(move |_| {
+            wasm_bindgen_futures::spawn_local(async move {
+                let _ = scan_local_repos().await;
+                web_sys::window()
+                    .and_then(|w| w.location().reload().ok());
+            });
+        })
+    };
+
+    html! {
+        <div class="modal-backdrop" onclick={on_backdrop_click}>
+            <div class="modal-content settings-modal" onclick={on_modal_click}>
+                <div class="modal-header">
+                    <h2>{ "Local Repository Settings" }</h2>
+                    <button class="close-button" onclick={on_close_button_click}>{ "✕" }</button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="settings-section">
+                        <h3>{ "Local Repository Root Paths" }</h3>
+                        <p class="settings-description">
+                            { "Configure directories to scan for local Git repositories. The tool will detect uncommitted changes and sync status." }
+                        </p>
+
+                        <div class="add-path-section">
+                            <input
+                                type="text"
+                                class="path-input"
+                                placeholder="e.g., ~/github/softwarewrighter"
+                                value={(*new_path).clone()}
+                                oninput={on_path_input}
+                            />
+                            <button class="btn btn-primary" onclick={on_add_path}>
+                                { "Add Path" }
+                            </button>
+                        </div>
+
+                        <div class="repo-roots-list">
+                            { if local_repo_roots.is_empty() {
+                                html! {
+                                    <p class="empty-message">{ "No local repository roots configured" }</p>
+                                }
+                            } else {
+                                html! {
+                                    <>
+                                        { for local_repo_roots.iter().map(|root| {
+                                            html! {
+                                                <div class="repo-root-item">
+                                                    <span class="root-path">{ &root.path }</span>
+                                                    <span class="root-status">
+                                                        { if root.enabled { "✓ Enabled" } else { "Disabled" } }
+                                                    </span>
+                                                </div>
+                                            }
+                                        })}
+                                    </>
+                                }
+                            }}
+                        </div>
+
+                        <div class="scan-section">
+                            <button class="btn btn-secondary" onclick={on_scan}>
+                                { "Scan Now" }
+                            </button>
+                            <p class="scan-help">{ "This will scan all enabled root paths for repositories and update their status." }</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 fn get_mock_groups() -> Vec<RepoGroup> {
     vec![
         RepoGroup {
+            id: Some(1),
             name: "Active Projects".to_string(),
             repos: vec![
                 Repository {
@@ -683,24 +1157,34 @@ fn get_mock_groups() -> Vec<RepoGroup> {
                     last_push: "2 hours ago".to_string(),
                     unmerged_count: 2,
                     pr_count: 1,
+                    pull_requests: vec![],
                     branches: vec![
                         BranchInfo {
                             name: "main".to_string(),
+                            sha: "a1b2c3d4e5f6".to_string(),
                             status: "InReview".to_string(),
                             ahead: 0,
                             behind: 0,
+                            last_commit_date: "2 hours ago".to_string(),
+                            commits: vec![],
                         },
                         BranchInfo {
                             name: "feature/yew-ui".to_string(),
+                            sha: "f6e5d4c3b2a1".to_string(),
                             status: "ReadyForPR".to_string(),
                             ahead: 15,
                             behind: 0,
+                            last_commit_date: "3 hours ago".to_string(),
+                            commits: vec![],
                         },
                         BranchInfo {
                             name: "feature/ai-analysis".to_string(),
+                            sha: "9876543210ab".to_string(),
                             status: "ReadyForPR".to_string(),
                             ahead: 8,
                             behind: 0,
+                            last_commit_date: "5 hours ago".to_string(),
+                            commits: vec![],
                         },
                     ],
                 },
@@ -712,18 +1196,25 @@ fn get_mock_groups() -> Vec<RepoGroup> {
                     last_push: "5 hours ago".to_string(),
                     unmerged_count: 0,
                     pr_count: 2,
+                    pull_requests: vec![],
                     branches: vec![
                         BranchInfo {
                             name: "main".to_string(),
+                            sha: "abc123def456".to_string(),
                             status: "InReview".to_string(),
                             ahead: 0,
                             behind: 0,
+                            last_commit_date: "5 hours ago".to_string(),
+                            commits: vec![],
                         },
                         BranchInfo {
                             name: "fix/docs-update".to_string(),
+                            sha: "789fedcba012".to_string(),
                             status: "InReview".to_string(),
                             ahead: 2,
                             behind: 0,
+                            last_commit_date: "6 hours ago".to_string(),
+                            commits: vec![],
                         },
                     ],
                 },
@@ -735,30 +1226,41 @@ fn get_mock_groups() -> Vec<RepoGroup> {
                     last_push: "1 day ago".to_string(),
                     unmerged_count: 2,
                     pr_count: 0,
+                    pull_requests: vec![],
                     branches: vec![
                         BranchInfo {
                             name: "main".to_string(),
+                            sha: "deadbeef1234".to_string(),
                             status: "InReview".to_string(),
                             ahead: 0,
                             behind: 0,
+                            last_commit_date: "1 day ago".to_string(),
+                            commits: vec![],
                         },
                         BranchInfo {
                             name: "feature/streaming".to_string(),
+                            sha: "cafebabe5678".to_string(),
                             status: "NeedsUpdate".to_string(),
                             ahead: 5,
                             behind: 3,
+                            last_commit_date: "2 days ago".to_string(),
+                            commits: vec![],
                         },
                         BranchInfo {
                             name: "refactor/error-handling".to_string(),
+                            sha: "1a2b3c4d5e6f".to_string(),
                             status: "ReadyForPR".to_string(),
                             ahead: 12,
                             behind: 0,
+                            last_commit_date: "1 day ago".to_string(),
+                            commits: vec![],
                         },
                     ],
                 },
             ],
         },
         RepoGroup {
+            id: Some(2),
             name: "Utilities".to_string(),
             repos: vec![
                 Repository {
@@ -769,11 +1271,15 @@ fn get_mock_groups() -> Vec<RepoGroup> {
                     last_push: "2 days ago".to_string(),
                     unmerged_count: 0,
                     pr_count: 0,
+                    pull_requests: vec![],
                     branches: vec![BranchInfo {
                         name: "main".to_string(),
+                        sha: "fedcba987654".to_string(),
                         status: "InReview".to_string(),
                         ahead: 0,
                         behind: 0,
+                        last_commit_date: "2 days ago".to_string(),
+                        commits: vec![],
                     }],
                 },
                 Repository {
@@ -784,16 +1290,21 @@ fn get_mock_groups() -> Vec<RepoGroup> {
                     last_push: "1 week ago".to_string(),
                     unmerged_count: 0,
                     pr_count: 0,
+                    pull_requests: vec![],
                     branches: vec![BranchInfo {
                         name: "main".to_string(),
+                        sha: "0123456789ab".to_string(),
                         status: "InReview".to_string(),
                         ahead: 0,
                         behind: 0,
+                        last_commit_date: "1 week ago".to_string(),
+                        commits: vec![],
                     }],
                 },
             ],
         },
         RepoGroup {
+            id: Some(3),
             name: "Experiments".to_string(),
             repos: vec![
                 Repository {
@@ -804,18 +1315,25 @@ fn get_mock_groups() -> Vec<RepoGroup> {
                     last_push: "3 weeks ago".to_string(),
                     unmerged_count: 1,
                     pr_count: 0,
+                    pull_requests: vec![],
                     branches: vec![
                         BranchInfo {
                             name: "main".to_string(),
+                            sha: "abcdef123456".to_string(),
                             status: "InReview".to_string(),
                             ahead: 0,
                             behind: 0,
+                            last_commit_date: "3 weeks ago".to_string(),
+                            commits: vec![],
                         },
                         BranchInfo {
                             name: "experimental".to_string(),
+                            sha: "fedcba654321".to_string(),
                             status: "ReadyForPR".to_string(),
                             ahead: 3,
                             behind: 0,
+                            last_commit_date: "4 weeks ago".to_string(),
+                            commits: vec![],
                         },
                     ],
                 },
@@ -838,6 +1356,7 @@ async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
         language: String,
         last_push: String,
         branches: Vec<BranchJson>,
+        pull_requests: Vec<PullRequestJson>,
         unmerged_count: u32,
         pr_count: u32,
     }
@@ -851,6 +1370,27 @@ async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
         behind_by: u32,
         status: String,
         last_commit_date: String,
+        commits: Vec<CommitJson>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CommitJson {
+        sha: String,
+        message: String,
+        author_name: String,
+        author_email: String,
+        authored_date: String,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct PullRequestJson {
+        number: u32,
+        title: String,
+        state: String,
+        created_at: String,
+        updated_at: String,
     }
 
     #[derive(Deserialize)]
@@ -893,9 +1433,33 @@ async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
                     .into_iter()
                     .map(|b| BranchInfo {
                         name: b.name,
+                        sha: b.sha.clone(),
                         status: b.status,
                         ahead: b.ahead_by,
                         behind: b.behind_by,
+                        last_commit_date: format_relative_time(&b.last_commit_date),
+                        commits: b
+                            .commits
+                            .into_iter()
+                            .map(|c| CommitInfo {
+                                sha: c.sha,
+                                message: c.message,
+                                author_name: c.author_name,
+                                author_email: c.author_email,
+                                authored_date: format_relative_time(&c.authored_date),
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+                pull_requests: r
+                    .pull_requests
+                    .into_iter()
+                    .map(|pr| PullRequestInfo {
+                        number: pr.number,
+                        title: pr.title,
+                        state: pr.state,
+                        created_at: format_relative_time(&pr.created_at),
+                        updated_at: format_relative_time(&pr.updated_at),
                     })
                     .collect(),
                 unmerged_count: r.unmerged_count,
@@ -904,6 +1468,7 @@ async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
             .collect();
 
         result.push(RepoGroup {
+            id: Some(group.id),
             name: group.name,
             repos,
         });
@@ -924,9 +1489,33 @@ async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
                     .into_iter()
                     .map(|b| BranchInfo {
                         name: b.name,
+                        sha: b.sha.clone(),
                         status: b.status,
                         ahead: b.ahead_by,
                         behind: b.behind_by,
+                        last_commit_date: format_relative_time(&b.last_commit_date),
+                        commits: b
+                            .commits
+                            .into_iter()
+                            .map(|c| CommitInfo {
+                                sha: c.sha,
+                                message: c.message,
+                                author_name: c.author_name,
+                                author_email: c.author_email,
+                                authored_date: format_relative_time(&c.authored_date),
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+                pull_requests: r
+                    .pull_requests
+                    .into_iter()
+                    .map(|pr| PullRequestInfo {
+                        number: pr.number,
+                        title: pr.title,
+                        state: pr.state,
+                        created_at: format_relative_time(&pr.created_at),
+                        updated_at: format_relative_time(&pr.updated_at),
                     })
                     .collect(),
                 unmerged_count: r.unmerged_count,
@@ -935,12 +1524,160 @@ async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
             .collect();
 
         result.push(RepoGroup {
+            id: None, // Ungrouped has no ID
             name: "Ungrouped".to_string(),
             repos: ungrouped_repos,
         });
     }
 
     Ok(result)
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn move_repo_to_group(repo_id: &str, target_group_id: Option<i64>) -> Result<(), String> {
+    use gloo::net::http::Request;
+    use serde::Serialize;
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct MoveRequest {
+        repo_id: String,
+        target_group_id: Option<i64>,
+    }
+
+    let request_body = MoveRequest {
+        repo_id: repo_id.to_string(),
+        target_group_id,
+    };
+
+    Request::post("/api/repos/move")
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .map_err(|e| format!("Failed to serialize request: {:?}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Failed to move repository: {:?}", e))?;
+
+    Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn create_pull_request(repo_id: &str, branch_name: &str) -> Result<String, String> {
+    use gloo::net::http::Request;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CreatePRRequest {
+        repo_id: String,
+        branch_name: String,
+        title: Option<String>,
+        body: Option<String>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CreatePRResponse {
+        success: bool,
+        pr_url: Option<String>,
+        message: String,
+    }
+
+    let request_body = CreatePRRequest {
+        repo_id: repo_id.to_string(),
+        branch_name: branch_name.to_string(),
+        title: None, // Let the backend generate from branch name
+        body: None,  // Use default
+    };
+
+    let response = Request::post("/api/pr/create")
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .map_err(|e| format!("Failed to serialize request: {:?}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Failed to create PR: {:?}", e))?;
+
+    let result: CreatePRResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {:?}", e))?;
+
+    if result.success {
+        if let Some(pr_url) = result.pr_url {
+            // Open PR in new tab
+            if let Some(window) = web_sys::window() {
+                let _ = window.open_with_url_and_target(&pr_url, "_blank");
+            }
+            Ok(pr_url)
+        } else {
+            Err("PR created but no URL returned".to_string())
+        }
+    } else {
+        Err(result.message)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn create_all_pull_requests(repo_id: &str) -> Result<String, String> {
+    use gloo::net::http::Request;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CreateAllPRsRequest {
+        repo_id: String,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct PRResult {
+        branch_name: String,
+        success: bool,
+        pr_url: Option<String>,
+        error: Option<String>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct CreateAllPRsResponse {
+        success: bool,
+        results: Vec<PRResult>,
+        message: String,
+    }
+
+    let request_body = CreateAllPRsRequest {
+        repo_id: repo_id.to_string(),
+    };
+
+    let response = Request::post("/api/pr/create-all")
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .map_err(|e| format!("Failed to serialize request: {:?}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Failed to create PRs: {:?}", e))?;
+
+    let result: CreateAllPRsResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {:?}", e))?;
+
+    if result.success {
+        // Open all successful PRs in new tabs
+        if let Some(window) = web_sys::window() {
+            for pr_result in &result.results {
+                if pr_result.success {
+                    if let Some(pr_url) = &pr_result.pr_url {
+                        let _ = window.open_with_url_and_target(pr_url, "_blank");
+                    }
+                }
+            }
+        }
+        Ok(result.message)
+    } else {
+        Err(result.message)
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1014,6 +1751,158 @@ async fn fetch_build_info() -> Result<BuildInfo, String> {
         git_commit: info.git_commit,
         git_commit_short: info.git_commit_short,
     })
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_local_repo_statuses() -> Result<Vec<LocalRepoStatus>, String> {
+    use gloo::net::http::Request;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct LocalRepoStatusJson {
+        id: i64,
+        repo_id: String,
+        local_path: String,
+        current_branch: Option<String>,
+        uncommitted_files: u32,
+        unpushed_commits: u32,
+        behind_commits: u32,
+        is_dirty: bool,
+        last_checked: String,
+    }
+
+    let response = Request::get("/api/local-repos/status")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch local repo statuses: {:?}", e))?;
+
+    let statuses_json: Vec<LocalRepoStatusJson> = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse local repo statuses: {:?}", e))?;
+
+    Ok(statuses_json
+        .into_iter()
+        .map(|s| LocalRepoStatus {
+            id: s.id,
+            repo_id: s.repo_id,
+            local_path: s.local_path,
+            current_branch: s.current_branch,
+            uncommitted_files: s.uncommitted_files,
+            unpushed_commits: s.unpushed_commits,
+            behind_commits: s.behind_commits,
+            is_dirty: s.is_dirty,
+            last_checked: s.last_checked,
+        })
+        .collect())
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_local_repo_roots() -> Result<Vec<LocalRepoRoot>, String> {
+    use gloo::net::http::Request;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct LocalRepoRootJson {
+        id: i64,
+        path: String,
+        enabled: bool,
+        created_at: String,
+    }
+
+    let response = Request::get("/api/local-repos/roots")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch local repo roots: {:?}", e))?;
+
+    let roots_json: Vec<LocalRepoRootJson> = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse local repo roots: {:?}", e))?;
+
+    Ok(roots_json
+        .into_iter()
+        .map(|r| LocalRepoRoot {
+            id: r.id,
+            path: r.path,
+            enabled: r.enabled,
+            created_at: r.created_at,
+        })
+        .collect())
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn add_local_repo_root(path: &str) -> Result<(), String> {
+    use gloo::net::http::Request;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct AddLocalRepoRootRequest {
+        path: String,
+    }
+
+    #[derive(Deserialize)]
+    struct AddLocalRepoRootResponse {
+        success: bool,
+        message: String,
+    }
+
+    let request_body = AddLocalRepoRootRequest {
+        path: path.to_string(),
+    };
+
+    let response = Request::post("/api/local-repos/roots")
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .map_err(|e| format!("Failed to serialize request: {:?}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Failed to add local repo root: {:?}", e))?;
+
+    let result: AddLocalRepoRootResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {:?}", e))?;
+
+    if result.success {
+        Ok(())
+    } else {
+        Err(result.message)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn scan_local_repos() -> Result<String, String> {
+    use gloo::net::http::Request;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct ScanResponse {
+        success: bool,
+        message: String,
+    }
+
+    let response = Request::post("/api/local-repos/scan")
+        .header("Content-Type", "application/json")
+        .body("{}")
+        .map_err(|e| format!("Failed to create request: {:?}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Failed to scan local repos: {:?}", e))?;
+
+    let result: ScanResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {:?}", e))?;
+
+    if result.success {
+        Ok(result.message)
+    } else {
+        Err(result.message)
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
