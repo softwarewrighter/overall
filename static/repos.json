@@ -1,0 +1,91 @@
+[
+  {
+    "branches": [
+      {
+        "aheadBy": 1,
+        "behindBy": 5,
+        "lastCommitDate": "2025-11-15T22:49:08+00:00",
+        "name": "claude/update-research-preview-notes-01M66ab8LaVtWd6dBFGNWM3t",
+        "sha": "475137ca158334d39a881b10464ef207446d3a9e",
+        "status": "ReadyForPR"
+      },
+      {
+        "aheadBy": 0,
+        "behindBy": 0,
+        "lastCommitDate": "2025-11-15T23:22:38+00:00",
+        "name": "main",
+        "sha": "0f0a46d2c33f09c0b62ef621aa6ddf2b0f81df4e",
+        "status": "ReadyForPR"
+      }
+    ],
+    "id": "softwarewrighter/overall",
+    "language": "Rust",
+    "lastPush": "2025-11-15T23:22:40+00:00",
+    "name": "overall",
+    "owner": "softwarewrighter",
+    "prCount": 0,
+    "unmergedCount": 0
+  },
+  {
+    "branches": [
+      {
+        "aheadBy": 0,
+        "behindBy": 2,
+        "lastCommitDate": "2025-08-08T04:31:32+00:00",
+        "name": "codex/find-and-fix-important-codebase-bug",
+        "sha": "e00d1023b22a669d18e0e1fd510be9ff8a06b022",
+        "status": "ReadyForPR"
+      },
+      {
+        "aheadBy": 0,
+        "behindBy": 0,
+        "lastCommitDate": "2025-11-15T22:22:56+00:00",
+        "name": "main",
+        "sha": "ff8662abb1d10e497e0fe658901a71972ea63059",
+        "status": "ReadyForPR"
+      }
+    ],
+    "id": "softwarewrighter/proact",
+    "language": "Rust",
+    "lastPush": "2025-11-15T22:23:10+00:00",
+    "name": "proact",
+    "owner": "softwarewrighter",
+    "prCount": 0,
+    "unmergedCount": 0
+  },
+  {
+    "branches": [
+      {
+        "aheadBy": 0,
+        "behindBy": 12,
+        "lastCommitDate": "2025-11-10T13:15:53+00:00",
+        "name": "claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u",
+        "sha": "25c925f1978a40eba2ab0bd313c99a4277d8c709",
+        "status": "ReadyForPR"
+      },
+      {
+        "aheadBy": 1,
+        "behindBy": 0,
+        "lastCommitDate": "2025-11-15T20:13:25+00:00",
+        "name": "claude/update-research-preview-notes-01CkUK5S7Pfq6LcXqjNZDm7R",
+        "sha": "43b264739015dff94cec1d984385abca28905975",
+        "status": "ReadyForPR"
+      },
+      {
+        "aheadBy": 0,
+        "behindBy": 0,
+        "lastCommitDate": "2025-11-11T19:58:13+00:00",
+        "name": "main",
+        "sha": "09195144d8b8fec974262d5ff8a0ea7da9d7c93d",
+        "status": "ReadyForPR"
+      }
+    ],
+    "id": "softwarewrighter/assist",
+    "language": "Rust",
+    "lastPush": "2025-11-15T20:13:35+00:00",
+    "name": "assist",
+    "owner": "softwarewrighter",
+    "prCount": 0,
+    "unmergedCount": 1
+  }
+]

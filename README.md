@@ -2,6 +2,8 @@
 
 A Rust/Yew web application that helps developers track and prioritize their GitHub repositories across multiple users and organizations.
 
+![GitHub Repository Manager UI](images/screenshot.png)
+
 ## Features
 
 - Scan repositories from GitHub users/organizations

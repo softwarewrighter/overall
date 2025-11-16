@@ -8,7 +8,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["softwarewrighter"]
+authors = ["Michael A Wright <softwarewrighter@users.noreply.github.com>"]
 license = "MIT"
 
 [workspace.dependencies]
@@ -40,12 +40,19 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Yew (for WASM UI)
 yew = { version = "0.21", features = ["csr"] }
 wasm-bindgen = "0.2"
+js-sys = "0.3"
 web-sys = { version = "0.3", features = [
     "Window",
     "Document",
     "Element",
     "HtmlElement",
+    "HtmlInputElement",
+    "HtmlSelectElement",
+    "HtmlAnchorElement",
     "Storage",
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
 ] }
 gloo = "0.11"
 yew-router = "0.18"

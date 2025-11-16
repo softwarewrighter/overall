@@ -2,11 +2,33 @@
 
 pub mod commands;
 
-use crate::{models::Repository, Result};
+use crate::{
+    models::{Branch, BranchStatus, PullRequest, Repository},
+    Result,
+};
 
 /// List repositories for a given owner (user or organization)
 pub fn list_repos(owner: &str, limit: usize) -> Result<Vec<Repository>> {
     commands::list_repos(owner, limit)
+}
+
+/// Fetch all branches for a repository
+pub fn fetch_branches(repo_id: &str) -> Result<Vec<Branch>> {
+    commands::fetch_branches(repo_id)
+}
+
+/// Fetch all pull requests for a repository
+pub fn fetch_pull_requests(repo_id: &str) -> Result<Vec<PullRequest>> {
+    commands::fetch_pull_requests(repo_id)
+}
+
+/// Classify branch status based on PR state
+pub fn classify_branch_status(
+    branch: &Branch,
+    prs: &[PullRequest],
+    default_branch: &str,
+) -> BranchStatus {
+    commands::classify_branch_status(branch, prs, default_branch)
 }
 
 #[cfg(test)]
@@ -67,5 +89,52 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_fetch_branches_returns_branches() {
+        // Use an existing softwarewrighter project for testing
+        let result = fetch_branches("softwarewrighter/proact");
+
+        if let Err(e) = &result {
+            eprintln!("Error fetching branches: {}", e);
+        }
+        assert!(result.is_ok(), "Should successfully fetch branches");
+
+        let branches = result.unwrap();
+        assert!(
+            !branches.is_empty(),
+            "Repository should have at least one branch"
+        );
+
+        // Verify branch structure
+        let branch = &branches[0];
+        assert!(!branch.name.is_empty());
+        assert!(!branch.sha.is_empty());
+        assert_eq!(branch.repo_id, "softwarewrighter/proact");
+    }
+
+    #[test]
+    fn test_fetch_branches_has_main_branch() {
+        let result = fetch_branches("softwarewrighter/proact");
+        assert!(result.is_ok());
+
+        let branches = result.unwrap();
+        let main_branch = branches.iter().find(|b| b.name == "main");
+        assert!(main_branch.is_some(), "Should have main branch");
+
+        // Main branch should have 0 ahead/behind of itself
+        let main = main_branch.unwrap();
+        assert_eq!(main.ahead_by, 0, "Main should be 0 ahead of itself");
+        assert_eq!(main.behind_by, 0, "Main should be 0 behind of itself");
+    }
+
+    #[test]
+    fn test_fetch_branches_invalid_repo() {
+        let result = fetch_branches("invalid-format");
+        assert!(result.is_err(), "Invalid format should return error");
+
+        let result = fetch_branches("softwarewrighter/nonexistent-repo-12345");
+        assert!(result.is_err(), "Nonexistent repo should return error");
     }
 }
