@@ -211,6 +211,61 @@ tracing_subscriber::fmt::init();
 - Binary: `target/release/overall`
 - Web server serves from `./static/` directory
 
+## Development Process (CRITICAL - READ FIRST)
+
+**ALWAYS follow these processes**. See `docs/ai_agent_instructions.md` and `docs/learnings.md` for details.
+
+### Test-Driven Development (TDD) - NON-NEGOTIABLE
+
+1. **Write tests FIRST** - never write implementation before tests
+2. **Red → Green → Refactor** cycle:
+   - Red: Write failing test
+   - Green: Implement minimal code to pass
+   - Refactor: Improve while keeping tests green
+
+### Checkpoint Process - Before EVERY Commit
+
+```bash
+# 1. Run ALL tests (MUST PASS)
+cargo test --all
+
+# 2. Fix ALL clippy warnings (ZERO warnings)
+cargo clippy --all-targets --all-features -- -D warnings
+
+# 3. Format code
+cargo fmt --all
+
+# 4. Build (must succeed)
+./scripts/build-all.sh
+
+# 5. Review changes
+git status
+git diff
+
+# 6. Stage and commit
+git add <files>
+git commit -m "..."
+git push
+```
+
+**NEVER skip any step**. If a step fails, fix it before proceeding.
+
+### API Development
+
+When adding API endpoints:
+1. Define types/contracts first
+2. Write tests FIRST (success, validation, errors)
+3. Implement to make tests pass
+4. Run integration tests
+5. Document endpoint
+6. Only then update UI
+
+**NEVER**:
+- Add endpoints without tests
+- Test only via UI
+- Skip error handling
+- Commit untested code
+
 ## Release Process
 
 The build includes cache-busting for static assets. Build date, git commit, and version are embedded at compile time (check `overall-cli/src/server/mod.rs` for build info generation).
@@ -220,3 +275,10 @@ When building for release:
 2. Binary is ready at `target/release/overall`
 3. Static files are ready in `static/`
 4. Can run `./target/release/overall serve` from any directory (will serve from `./static/`)
+
+## Important References
+
+- **Development Process**: `docs/ai_agent_instructions.md` - Full process guidelines
+- **Learnings**: `docs/learnings.md` - Historical mistakes and solutions
+- **Architecture**: `docs/architecture.md` - System design details
+- **Status**: `docs/status.md` - Current progress

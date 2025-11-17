@@ -232,6 +232,150 @@ async fn fetch() -> Result<T, String> {
 
 ## Process Improvements
 
+### ✅ Test-Driven Development (TDD) - NON-NEGOTIABLE
+
+**CRITICAL**: Always follow TDD. Never write implementation code before tests.
+
+**The TDD Cycle (Red-Green-Refactor)**:
+1. **Red**: Write a failing test first
+2. **Green**: Write minimal code to make it pass
+3. **Refactor**: Improve code while keeping tests green
+
+**Examples**:
+
+❌ **WRONG - Implementation First**:
+```rust
+// Added new API endpoint
+async fn sync_all_repos(...) -> Response {
+    // 100 lines of implementation
+}
+
+// No tests written
+// Manually tested in UI
+// Committed with "works on my machine"
+```
+
+✅ **CORRECT - Test First**:
+```rust
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn test_sync_all_repos_success() {
+        // Setup test database
+        // Call sync_all_repos
+        // Assert correct behavior
+    }
+
+    #[tokio::test]
+    async fn test_sync_all_repos_handles_errors() {
+        // Test error cases
+    }
+}
+
+// ONLY AFTER tests are written:
+async fn sync_all_repos(...) -> Response {
+    // Implementation
+}
+```
+
+**Why This Matters**:
+- Prevents broken code from being committed
+- Forces thinking about edge cases upfront
+- Provides regression protection
+- Documents expected behavior
+- Catches integration issues early
+
+**Consequences of Skipping TDD**:
+- UI features that don't work
+- API endpoints with no error handling
+- Broken builds pushed to main
+- Wasted time debugging in production
+- Loss of confidence in codebase
+
+### ✅ Checkpoint Process - ALWAYS REQUIRED
+
+**Before ANY commit**, execute this exact sequence:
+
+```bash
+# 1. Run ALL tests (MUST PASS)
+cargo test --all
+
+# 2. Fix ALL clippy warnings (ZERO warnings allowed)
+cargo clippy --all-targets --all-features -- -D warnings
+
+# 3. Format ALL code (auto-fixes)
+cargo fmt --all
+
+# 4. Build WASM if applicable (MUST succeed)
+./scripts/build-all.sh
+
+# 5. Run project-specific checks
+# - Check for TODO limits (max 3 per file)
+# - Verify file sizes (< 500 lines)
+# - Run sw-checklist if available
+# - Run markdown-checker on docs
+
+# 6. Review git status
+git status
+git diff
+
+# 7. Stage ONLY related files
+git add <specific-files>
+
+# 8. Commit with detailed message
+git commit -m "..."
+
+# 9. Push immediately
+git push
+```
+
+**NEVER skip any step**. If a step fails, fix it before proceeding.
+
+### ✅ API Development Process
+
+**When adding new API endpoints**:
+
+1. **Define the contract** (types, request/response)
+2. **Write tests FIRST**:
+   ```rust
+   #[tokio::test]
+   async fn test_new_endpoint_success() { }
+
+   #[tokio::test]
+   async fn test_new_endpoint_validation() { }
+
+   #[tokio::test]
+   async fn test_new_endpoint_error_handling() { }
+   ```
+3. **Implement endpoint** to make tests pass
+4. **Run integration tests** with actual server
+5. **Document** the endpoint (OpenAPI/comments)
+6. **Only then** update UI to use it
+
+**NEVER**:
+- Add endpoints without tests
+- Test only via UI
+- Skip error handling
+- Assume "it works" without automated verification
+
+### ✅ Quality Gates - Must Pass Before Commit
+
+**Automated Checks**:
+- ✅ All tests pass (`cargo test --all`)
+- ✅ Zero clippy warnings (`cargo clippy --all-targets --all-features -- -D warnings`)
+- ✅ Code formatted (`cargo fmt --all --check`)
+- ✅ Builds successfully (`cargo build --release`)
+- ✅ Documentation builds (`cargo doc --no-deps`)
+
+**Manual Checks**:
+- ✅ Git status reviewed (no accidental files)
+- ✅ Commit message follows convention
+- ✅ Changes are logical and atomic
+- ✅ No debugging code left in
+- ✅ No commented-out code blocks
+
+**If ANY check fails, DO NOT commit**. Fix the issue first.
+
 ### ✅ Avoid Dead Code Attributes
 
 **Never use**: `#[allow(dead_code)]`
@@ -256,11 +400,51 @@ async fn fetch() -> Result<T, String> {
 
 ## Lessons Learned
 
-1. **Scale from Day 1**: Design UI for 10x the current data volume
-2. **No Tech Debt**: Never use `allow(dead_code)` - fix the root cause
-3. **Visual Feedback**: Status indicators must be instantly recognizable
-4. **Build Traceability**: Always capture commit SHA, host, and timestamp
-5. **Progressive Disclosure**: Show summary first, details on demand
-6. **Conditional Compilation**: Use `#[cfg(...)]` for target-specific code
-7. **Screenshot Everything**: Document UI changes visually
-8. **Type Safety**: Let the compiler catch errors early (no JsValue leaks)
+1. **TDD is Non-Negotiable**: Never skip writing tests first - it ALWAYS causes problems
+2. **Checkpoint Process is Mandatory**: Run tests, clippy, fmt before EVERY commit
+3. **API Endpoints Need Tests**: Never add server endpoints without automated tests
+4. **Manual UI Testing is Insufficient**: Broken APIs only discovered when tests would have caught them immediately
+5. **Scale from Day 1**: Design UI for 10x the current data volume
+6. **No Tech Debt**: Never use `allow(dead_code)` - fix the root cause
+7. **Visual Feedback**: Status indicators must be instantly recognizable
+8. **Build Traceability**: Always capture commit SHA, host, and timestamp
+9. **Progressive Disclosure**: Show summary first, details on demand
+10. **Conditional Compilation**: Use `#[cfg(...)]` for target-specific code
+11. **Screenshot Everything**: Document UI changes visually
+12. **Type Safety**: Let the compiler catch errors early (no JsValue leaks)
+
+## Critical Failures to Remember
+
+### 2025-11-16: Skipped TDD and Checkpoint Process
+
+**What Happened**:
+- Added new API endpoints (`sync_all_repos`, `sync_single_repo`) without writing tests
+- Added database methods (`get_config`, `set_config`, `get_repositories_updated_since`) without tests
+- Modified UI code without verifying API endpoints work
+- Attempted to commit documentation (CLAUDE.md) while WIP code remained
+- Skipped running tests, clippy, and formatting before commit
+
+**Consequences**:
+- API endpoints may be broken (untested)
+- UI features likely don't work
+- Database methods unverified
+- Mixed concerns in git history (docs + untested features)
+- Violation of TDD principles
+
+**What Should Have Happened**:
+1. Write tests for new database methods FIRST
+2. Implement database methods to pass tests
+3. Write tests for API endpoints FIRST
+4. Implement endpoints to pass tests
+5. Run full checkpoint process (tests, clippy, fmt, build)
+6. ONLY THEN update UI
+7. Verify end-to-end with integration tests
+8. Commit features separately from documentation
+
+**Prevention**:
+- Always read `docs/ai_agent_instructions.md` before starting work
+- Follow TDD cycle religiously: Red → Green → Refactor
+- Run checkpoint process before ANY commit
+- Never commit untested code
+- Separate documentation commits from feature commits
+- When in doubt, write a test first
