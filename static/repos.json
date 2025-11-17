@@ -120,27 +120,6 @@
           "prCount": 0,
           "pullRequests": [],
           "unmergedCount": 0
-        },
-        {
-          "branches": [
-            {
-              "aheadBy": 0,
-              "behindBy": 0,
-              "commits": [],
-              "lastCommitDate": "2025-08-27T21:33:40+00:00",
-              "name": "main",
-              "sha": "83ad978001e72a85357d780740ebf8f4c923136d",
-              "status": "ReadyForPR"
-            }
-          ],
-          "id": "softwarewrighter/emacs-rust-menus",
-          "language": "Rust",
-          "lastPush": "2025-08-27T21:33:47+00:00",
-          "name": "emacs-rust-menus",
-          "owner": "softwarewrighter",
-          "prCount": 0,
-          "pullRequests": [],
-          "unmergedCount": 0
         }
       ]
     },
@@ -607,301 +586,49 @@
           "branches": [
             {
               "aheadBy": 0,
-              "behindBy": 12,
-              "commits": [],
-              "lastCommitDate": "2025-11-10T13:15:53+00:00",
-              "name": "claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u",
-              "sha": "25c925f1978a40eba2ab0bd313c99a4277d8c709",
-              "status": "ReadyForPR"
-            },
-            {
-              "aheadBy": 1,
               "behindBy": 0,
-              "commits": [
-                {
-                  "authorEmail": "noreply@anthropic.com",
-                  "authorName": "Claude",
-                  "authoredDate": "2025-11-15T20:13:25+00:00",
-                  "committedDate": "2025-11-15T20:13:25+00:00",
-                  "committerEmail": "noreply@anthropic.com",
-                  "committerName": "Claude",
-                  "message": "docs: Add comprehensive research preview status notes\n\nCreated claude-web-research-preview-notes.md with:\n- Current implementation status and gap analysis\n- Completed features review (scanner, database, LLM, reporting)\n- Test coverage summary (64 tests passing)\n- Technical health assessment (~2,136 LOC)\n- Prioritized roadmap for next steps\n- Risk assessment and mitigation strategies\n\nKey findings:\n- Core MVP features 80% complete\n- All tests passing, code quality high\n- Ready for Priority 1: Polish and public release\n- Recommended focus: documentation, distribution, performance",
-                  "sha": "43b264739015dff94cec1d984385abca28905975"
-                },
-                {
-                  "authorEmail": "wrightmikea@gmail.com",
-                  "authorName": "Mike Wright",
-                  "authoredDate": "2025-11-11T19:58:13+00:00",
-                  "committedDate": "2025-11-11T19:58:13+00:00",
-                  "committerEmail": "wrightmikea@gmail.com",
-                  "committerName": "Mike Wright",
-                  "message": "refactor: Reduce function arguments using parameter structs\n\nProperly fixed the clippy::too_many_arguments warning by introducing\nparameter grouping structs instead of suppressing the warning.\n\nChanges:\n- Created CliContext struct to group verbose and dry_run flags\n- Created FilterOptions struct to group repository filter flags\n  (recent, stale, active, all)\n- Refactored handle_analyze_command from 8 params to 4 params\n- Refactored handle_scan_command from 4 params to 3 params\n- Refactored handle_report_command from 6 params to 3 params\n- Refactored handle_config_command from 3 params to 3 params (using ctx)\n- Refactored analyze_batch from 7 params to 3 params\n- Refactored analyze_single_repository from 4 params to 3 params\n- Removed #[allow(clippy::too_many_arguments)] directive\n\nAll functions now follow Rust best practices (≤7 parameters).\nAll tests pass and clippy reports zero warnings.\n\nThis eliminates technical debt from the previous commit where the\nwarning was only suppressed rather than properly addressed.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
-                  "sha": "09195144d8b8fec974262d5ff8a0ea7da9d7c93d"
-                },
-                {
-                  "authorEmail": "wrightmikea@gmail.com",
-                  "authorName": "Mike Wright",
-                  "authoredDate": "2025-11-11T19:49:58+00:00",
-                  "committedDate": "2025-11-11T19:49:58+00:00",
-                  "committerEmail": "wrightmikea@gmail.com",
-                  "committerName": "Mike Wright",
-                  "message": "chore: Run cargo fmt and fix all clippy warnings\n\nApplied automated code quality improvements to meet Rust best practices:\n\nCode Formatting (cargo fmt):\n- Applied consistent formatting across all source files\n- Fixed line lengths and indentation\n- Reformatted long function calls and match statements\n\nClippy Fixes:\n- Removed redundant closures (use function directly in map_err)\n- Removed useless format! macro (use .to_string() or direct string)\n- Changed &PathBuf to &Path in function signatures (more idiomatic)\n- Used .flatten() instead of nested if-let for iterator unwrapping\n- Added #[allow(clippy::too_many_arguments)] for analyze command\n  (refactoring to reduce params would require larger structural changes)\n\nAll tests pass (64 tests) and code compiles without warnings.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
-                  "sha": "41770d1a1ed1fb0265e0978c6b1f37f01c2f32c3"
-                },
-                {
-                  "authorEmail": "wrightmikea@gmail.com",
-                  "authorName": "Mike Wright",
-                  "authoredDate": "2025-11-11T19:43:18+00:00",
-                  "committedDate": "2025-11-11T19:43:18+00:00",
-                  "committerEmail": "wrightmikea@gmail.com",
-                  "committerName": "Mike Wright",
-                  "message": "fix: Canonicalize repository paths to prevent duplicates\n\nRepository paths are now canonicalized (converted to absolute paths)\nbefore being stored in the database. This prevents the same repository\nfrom being stored multiple times with different path representations\n(e.g., relative vs absolute paths like \"../assist\" vs\n\"/Users/mike/github/softwarewrighter/assist\").\n\nChanges:\n- GitAnalyzer now calls path.canonicalize() before storing\n- All paths in the database are now consistent absolute paths\n- Eliminates duplicate entries in reports and database queries\n- Added .claude/ to .gitignore for local settings\n\nTesting:\n- All existing tests pass\n- Verified that rescanning eliminates duplicates (28→27 repos)\n- Active repos report reduced from 12→11 (duplicate removed)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
-                  "sha": "a335f633bba3ef957c41b319fb7da247f23d6d44"
-                },
-                {
-                  "authorEmail": "wrightmikea@gmail.com",
-                  "authorName": "Mike Wright",
-                  "authoredDate": "2025-11-11T19:31:52+00:00",
-                  "committedDate": "2025-11-11T19:31:52+00:00",
-                  "committerEmail": "wrightmikea@gmail.com",
-                  "committerName": "Mike Wright",
-                  "message": "feat: Add dry-run mode (-n/--dry-run) to prevent destructive operations\n\nImplements a comprehensive dry-run mode that shows what would be done\nwithout actually making changes. This is useful for verifying commands\nbefore execution, especially for database writes and LLM API calls.\n\nFeatures:\n- Global -n/--dry-run flag available on all commands\n- Visual indicator (🔍 DRY-RUN MODE) when enabled\n- Scan command: Shows repositories that would be stored in database\n- Analyze command: Shows LLM analysis plan without API calls\n  - Single repo: Shows Ollama connection details and analysis plan\n  - Batch mode: Lists all repos that would be analyzed\n- Config --edit: Shows editor that would be opened without launching it\n\nAll database writes and LLM API calls are skipped in dry-run mode,\nwhile repository discovery and validation still occur to provide\naccurate preview of what would happen.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
-                  "sha": "22e66be575aaf29661666e3305c4e99c1696f37c"
-                },
-                {
-                  "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
-                  "authorName": "softwarewrighter",
-                  "authoredDate": "2025-11-10T13:18:57+00:00",
-                  "committedDate": "2025-11-10T13:18:57+00:00",
-                  "committerEmail": "noreply@github.com",
-                  "committerName": "GitHub",
-                  "message": "Merge pull request #8 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nClaude/summarize project purpose 011 c uz6rxmwe3p n7jk6 ht d6u",
-                  "sha": "bf5782689e9bc9df6b8807cfd5845369e03c1253"
-                },
-                {
-                  "authorEmail": "noreply@anthropic.com",
-                  "authorName": "Claude",
-                  "authoredDate": "2025-11-10T13:15:53+00:00",
-                  "committedDate": "2025-11-10T13:15:53+00:00",
-                  "committerEmail": "noreply@anthropic.com",
-                  "committerName": "Claude",
-                  "message": "feat: Add batch analysis support to analyze command\n\nExtended the analyze command to support batch analysis with filters:\n\n**New Batch Analysis Modes:**\n- `assist analyze --recent` - Batch analyze recently active repos\n- `assist analyze --stale` - Batch analyze stale repos\n- `assist analyze --active` - Batch analyze repos with uncommitted changes\n- `assist analyze --all` - Batch analyze all repos\n\n**Features:**\n- Smart skipping: Won't re-analyze unless --force is specified\n- Progress tracking: Shows [1/10], [2/10], etc. as it processes\n- Summary report: Shows analyzed, skipped, and error counts\n- Respects max_repos_in_summary configuration limit\n- Silent analysis mode (verbose=false) for batch operations\n\n**Single Repo Mode (unchanged):**\n- `assist analyze ~/path/to/repo` - Analyze single repository\n- `assist analyze ~/path/to/repo --force` - Force re-analysis\n\n**Example Output:**\n```\nBatch Analysis: 5 repositories\n\n[1/5] Analyzing: assist\n   Already analyzed (use --force to re-analyze)\n\n[2/5] Analyzing: my-app\nChecking Ollama connection...\nConnected to Ollama using model: llama3.2\nGenerating analysis...\nAnalysis complete!\n\n============================================================\nBatch Analysis Complete\n  Analyzed: 4\n  Skipped:  1\n```\n\nAll 64 tests passing.",
-                  "sha": "25c925f1978a40eba2ab0bd313c99a4277d8c709"
-                },
-                {
-                  "authorEmail": "noreply@anthropic.com",
-                  "authorName": "Claude",
-                  "authoredDate": "2025-11-10T12:47:11+00:00",
-                  "committedDate": "2025-11-10T12:47:11+00:00",
-                  "committerEmail": "noreply@anthropic.com",
-                  "committerName": "Claude",
-                  "message": "fix: Enhance --active flag with detailed status and explanations\n\nFixed and enhanced the --active flag to properly detect and explain repository activity:\n\n**Bug Fix:**\n- Fixed has_uncommitted_changes() to correctly filter out IGNORED and CURRENT files\n- Now properly identifies only repos with actual changes\n\n**Enhanced Status Detection:**\n- Created RepoStatus struct with comprehensive status information:\n  * Untracked files count\n  * Modified tracked files count\n  * Staged files count\n  * Current branch name\n  * Upstream tracking branch\n  * Commits ahead of upstream\n  * Commits behind upstream\n\n- get_detailed_status() method captures full git status\n- is_active() checks for any form of activity\n- get_activity_summary() provides human-readable reasons\n\n**Enhanced Report Output:**\nFor --active reports, now shows:\n- Why each repository is considered active\n- One-line status summary (e.g., \"2 modified files, 1 commit ahead\")\n- Branch tracking information with upstream\n- Separate formatting for terminal, JSON, and Markdown\n\n**Example Output:**\n```\nActive Repositories\n2 repositories with uncommitted changes or divergence\n\n1. assist (softwarewrighter)\n   Path: /Users/mike/github/assist\n   Status: 2 modified files, 1 staged file, 3 commits ahead of upstream\n   Branch: main -> origin/main\n   Last Commit: 2025-01-10 14:23:45 (0 days ago)\n```\n\nAll 64 tests passing.",
-                  "sha": "81dd95027a28f321bbcbccbc81297cbc804736da"
-                },
-                {
-                  "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
-                  "authorName": "softwarewrighter",
-                  "authoredDate": "2025-11-10T12:36:43+00:00",
-                  "committedDate": "2025-11-10T12:36:43+00:00",
-                  "committerEmail": "noreply@github.com",
-                  "committerName": "GitHub",
-                  "message": "Merge pull request #7 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfeat: Implement --active flag and analyze command with Ollama",
-                  "sha": "d0b74279fe66fe9be316b1a60c81ffe497e6793d"
-                },
-                {
-                  "authorEmail": "noreply@anthropic.com",
-                  "authorName": "Claude",
-                  "authoredDate": "2025-11-10T12:30:50+00:00",
-                  "committedDate": "2025-11-10T12:30:50+00:00",
-                  "committerEmail": "noreply@anthropic.com",
-                  "committerName": "Claude",
-                  "message": "feat: Implement --active flag and analyze command with Ollama\n\nImplemented full analyze functionality:\n\n**--active flag for report command:**\n- Dynamically checks all repositories for uncommitted changes\n- Uses GitAnalyzer.has_uncommitted_changes() to detect modified files\n- Filters repositories with uncommitted changes\n- Respects max_repos_in_summary configuration limit\n\n**Ollama LLM integration:**\n- Created llm module with OllamaClient\n- Health check to verify Ollama connectivity\n- Repository analysis with context from README and recent commits\n- Configurable model and host settings\n- 120-second timeout for LLM operations\n\n**Analyze command:**\n- Analyzes single repository at specified path\n- Reads README file (up to 2000 chars) for context\n- Extracts last 10 commit messages for recent activity\n- Connects to Ollama to generate comprehensive analysis\n- Stores analysis in database with timestamps\n- Prevents duplicate analysis unless --force is used\n- Verbose mode for debugging Ollama connection\n- Pretty-printed results with model and date information\n\n**Database integration:**\n- Automatically adds repository to database if not present\n- Links analysis to repository record\n- Retrieves cached analysis on subsequent runs\n\nAll 64 tests passing.",
-                  "sha": "4a83eed6809e770c7bf33838d3b5141c03942e0b"
-                },
-                {
-                  "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
-                  "authorName": "softwarewrighter",
-                  "authoredDate": "2025-11-10T12:21:17+00:00",
-                  "committedDate": "2025-11-10T12:21:17+00:00",
-                  "committerEmail": "noreply@github.com",
-                  "committerName": "GitHub",
-                  "message": "Merge pull request #6 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfeat: Implement report command with multiple output formats",
-                  "sha": "b0f44af7b52f00756016369104087f1f0b70b0a3"
-                },
-                {
-                  "authorEmail": "noreply@anthropic.com",
-                  "authorName": "Claude",
-                  "authoredDate": "2025-11-10T12:15:53+00:00",
-                  "committedDate": "2025-11-10T12:15:53+00:00",
-                  "committerEmail": "noreply@anthropic.com",
-                  "committerName": "Claude",
-                  "message": "feat: Implement report command with multiple output formats\n\nAdded comprehensive report functionality:\n\n- Database methods:\n  - Added get_all_repositories() method to fetch all repos with optional limit\n\n- Report command features:\n  - --recent: Show recently active projects (within configured days)\n  - --stale: Show stale projects (no commits in configured days)\n  - --active: Placeholder for uncommitted changes (shows all for now)\n  - --all: Show all repositories without filters\n  - Default behavior: Show recent repositories\n\n- Output formats:\n  - Terminal: Colorized, formatted list with details\n  - JSON: Machine-readable structured output\n  - Markdown: Documentation-friendly format\n\n- Uses configuration settings:\n  - reporting.days_for_recent: Days to consider recent\n  - reporting.max_repos_in_summary: Maximum repos to show\n\nAll tests passing (62 tests).",
-                  "sha": "8ec93808363958a905e32e374b997a1567d0ad30"
-                },
-                {
-                  "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
-                  "authorName": "softwarewrighter",
-                  "authoredDate": "2025-11-10T12:12:03+00:00",
-                  "committedDate": "2025-11-10T12:12:03+00:00",
-                  "committerEmail": "noreply@github.com",
-                  "committerName": "GitHub",
-                  "message": "Merge pull request #5 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfeat: Add comprehensive diagnostics for database file creation",
-                  "sha": "5059a817b5db8fe5fb07b8c70fd6fc6cc844619c"
-                },
-                {
-                  "authorEmail": "noreply@anthropic.com",
-                  "authorName": "Claude",
-                  "authoredDate": "2025-11-10T12:11:05+00:00",
-                  "committedDate": "2025-11-10T12:11:05+00:00",
-                  "committerEmail": "noreply@anthropic.com",
-                  "committerName": "Claude",
-                  "message": "feat: Add comprehensive diagnostics for database file creation\n\nAdded detailed debugging output to identify SQLite connection issues:\n- Check directory permissions and metadata\n- Test write permissions by creating a test file\n- Attempt to manually create database file if it doesn't exist\n\nThis will help identify whether the issue is:\n- Permission-related\n- SQLite library issue\n- File system access problem",
-                  "sha": "bd1d7faafa47e8988b2264ea4dc63f064e7fd8e8"
-                },
-                {
-                  "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
-                  "authorName": "softwarewrighter",
-                  "authoredDate": "2025-11-10T12:07:36+00:00",
-                  "committedDate": "2025-11-10T12:07:36+00:00",
-                  "committerEmail": "noreply@github.com",
-                  "committerName": "GitHub",
-                  "message": "Merge pull request #4 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfeat: Add verbose flag for detailed debugging output",
-                  "sha": "cf13ae4085317207979d1ac09166248e5b94f92e"
-                },
-                {
-                  "authorEmail": "noreply@anthropic.com",
-                  "authorName": "Claude",
-                  "authoredDate": "2025-11-10T12:06:30+00:00",
-                  "committedDate": "2025-11-10T12:06:30+00:00",
-                  "committerEmail": "noreply@anthropic.com",
-                  "committerName": "Claude",
-                  "message": "feat: Add verbose flag for detailed debugging output\n\nAdds -v/--verbose flag to all commands (global flag). When used with\n'scan', it shows:\n- Configuration loading steps\n- Database path and URL generation\n- Exact SQLite connection string\n- File permissions and existence checks\n- Step-by-step progress through scanning\n- Detailed error information\n\nUsage: cargo run -- scan -v\n\nThis will help diagnose the database connection issue by showing\nexactly what URL is being generated and where the error occurs.",
-                  "sha": "31325da9d17ac2fe82836cde96b2ca60cbb37c31"
-                },
-                {
-                  "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
-                  "authorName": "softwarewrighter",
-                  "authoredDate": "2025-11-10T12:03:45+00:00",
-                  "committedDate": "2025-11-10T12:03:45+00:00",
-                  "committerEmail": "noreply@github.com",
-                  "committerName": "GitHub",
-                  "message": "Merge pull request #3 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfix: Correct SQLite URL format to avoid four slashes",
-                  "sha": "0cbe45aefd14ad585d039af2cd9258eeb9653ead"
-                },
-                {
-                  "authorEmail": "noreply@anthropic.com",
-                  "authorName": "Claude",
-                  "authoredDate": "2025-11-10T12:01:33+00:00",
-                  "committedDate": "2025-11-10T12:01:33+00:00",
-                  "committerEmail": "noreply@anthropic.com",
-                  "committerName": "Claude",
-                  "message": "fix: Correct SQLite URL format to avoid four slashes\n\nThe previous fix used sqlite:///{path} which resulted in four slashes\nfor Unix absolute paths (e.g., sqlite:////Users/mike/db.sqlite).\n\nThe correct format is sqlite://{path} which gives:\n- sqlite:///Users/mike/db.sqlite (3 slashes) for absolute paths\n- sqlite://./relative.db (2 slashes) for relative paths\n\nThis fixes the 'unable to open database file' error on macOS/Unix.",
-                  "sha": "b3f178b57ce0ef93e30acdd03c02704ac56a73c7"
-                },
-                {
-                  "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
-                  "authorName": "softwarewrighter",
-                  "authoredDate": "2025-11-10T11:57:11+00:00",
-                  "committedDate": "2025-11-10T11:57:11+00:00",
-                  "committerEmail": "noreply@github.com",
-                  "committerName": "GitHub",
-                  "message": "Merge pull request #2 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfix: Use correct SQLite URL format for absolute paths",
-                  "sha": "5e4ee3c112be10187b8e5e7852c96a3ea00a57e0"
-                },
-                {
-                  "authorEmail": "noreply@anthropic.com",
-                  "authorName": "Claude",
-                  "authoredDate": "2025-11-10T11:54:41+00:00",
-                  "committedDate": "2025-11-10T11:54:41+00:00",
-                  "committerEmail": "noreply@anthropic.com",
-                  "committerName": "Claude",
-                  "message": "fix: Use correct SQLite URL format for absolute paths\n\nSQLite URLs require three slashes (sqlite:///) for absolute paths\nand two slashes (sqlite://) for relative paths. This fixes the\n'unable to open database file' error when running assist scan.\n\nFixes database connection issues on macOS and other systems where\nthe database is stored at an absolute path like ~/.assist/assist.db",
-                  "sha": "56f770f9af38b04c797588185dd866a4d1a37ae6"
-                },
-                {
-                  "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
-                  "authorName": "softwarewrighter",
-                  "authoredDate": "2025-11-10T11:27:21+00:00",
-                  "committedDate": "2025-11-10T11:27:21+00:00",
-                  "committerEmail": "noreply@github.com",
-                  "committerName": "GitHub",
-                  "message": "Merge pull request #1 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nDocument Project Purpose Summary",
-                  "sha": "8282adef224094ad82170e84250071d269cec721"
-                },
-                {
-                  "authorEmail": "noreply@anthropic.com",
-                  "authorName": "Claude",
-                  "authoredDate": "2025-11-10T11:24:46+00:00",
-                  "committedDate": "2025-11-10T11:24:46+00:00",
-                  "committerEmail": "noreply@anthropic.com",
-                  "committerName": "Claude",
-                  "message": "feat: Implement config, status, and scan commands with scanner module\n\n- Implemented config command with show and edit functionality\n- Implemented status command showing database and config status\n- Built complete scanner module for git repository detection\n  - Walker for traversing directories and finding repos\n  - GitAnalyzer for extracting repository metadata\n  - Scanner for orchestrating discovery and analysis\n- Implemented scan command that discovers repos and stores in database\n- All 62 tests passing (43 existing + 19 new scanner tests)\n- Fixed path traversal to handle hidden root directories\n- Integrated scanner with database for persistent storage\n\nComponents ready for production:\n- Configuration management (TOML-based)\n- Database layer (SQLite with migrations)\n- Git repository scanning and metadata extraction\n- CLI commands: config, status, scan",
-                  "sha": "ab305cae9676980fb598ac5e7a9842d549f2ad49"
-                },
-                {
-                  "authorEmail": "wrightmikea@gmail.com",
-                  "authorName": "Mike Wright",
-                  "authoredDate": "2025-09-28T18:03:29+00:00",
-                  "committedDate": "2025-09-28T18:03:29+00:00",
-                  "committerEmail": "wrightmikea@gmail.com",
-                  "committerName": "Mike Wright",
-                  "message": "docs: Add comprehensive usage guide\n\nCreated detailed user documentation covering:\n- Installation and initial setup instructions\n- Configuration for different machines and ownership structures\n- All core commands with examples and expected output\n- Common workflows (daily status, weekly review, project recovery)\n- Advanced usage with jq, fzf, and database queries\n- Integration with other tools (Alfred, cron, git hooks)\n- Troubleshooting guide and performance tuning\n- Real-world examples and best practices\n\nThe guide provides practical examples for both personal (wrightmikea) and business (softwarewrighter) repository management across multiple machines.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
-                  "sha": "59d45727a4c83803a9438248f8d472d23a578ff7"
-                },
-                {
-                  "authorEmail": "wrightmikea@gmail.com",
-                  "authorName": "Mike Wright",
-                  "authoredDate": "2025-09-28T18:00:57+00:00",
-                  "committedDate": "2025-09-28T18:00:57+00:00",
-                  "committerEmail": "wrightmikea@gmail.com",
-                  "committerName": "Mike Wright",
-                  "message": "feat: Implement TDD foundation with config and database modules\n\nEstablished Test-Driven Development workflow and implemented core modules\nfollowing red-green-refactor cycle with comprehensive test coverage.\n\n## Development Process Documentation\n- Created docs/process.md with TDD methodology and best practices\n- Defined red-green-refactor cycle workflow\n- Established code quality standards and CI/CD guidelines\n- Added pre-commit checks and security checklist\n\n## Test Infrastructure\n- Set up test_helpers module with utilities for:\n  - Creating test git repositories with various states\n  - Mock database setup\n  - Test configuration generation\n  - Mock Ollama responses\n\n## Error Handling Module\n- Comprehensive error types with thiserror\n- Context wrapping for better error messages\n- Type conversions for external error types\n- 100% test coverage\n\n## Configuration Module (12 tests, all passing)\n- TOML-based configuration parsing and validation\n- Support for multiple ownership structures (personal/business)\n- Path expansion for home directory\n- Ollama server configuration with failover support\n- Default values with override capabilities\n- Fixed clippy warnings (renamed from_str to from_toml_str)\n\n## Database Module (22 tests, all passing)\n- SQLite integration with sqlx\n- Three core tables: repositories, analyses, scan_history\n- Full CRUD operations for repository management\n- Analysis storage with LLM results\n- Scan history tracking\n- Connection pooling and health checks\n- Support for in-memory databases (testing)\n- Fixed chrono DateTime binding issues\n\n## Code Quality\n- All modules pass clippy with no warnings\n- Consistent error handling patterns\n- Comprehensive documentation with examples\n- Following Rust API guidelines\n\nNext steps: Implement scanner module for git repository discovery.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
-                  "sha": "6a58af6223922887a387d6b15fd526d27f2b3a04"
-                },
-                {
-                  "authorEmail": "wrightmikea@gmail.com",
-                  "authorName": "Mike Wright",
-                  "authoredDate": "2025-09-28T17:48:57+00:00",
-                  "committedDate": "2025-09-28T17:48:57+00:00",
-                  "committerEmail": "wrightmikea@gmail.com",
-                  "committerName": "Mike Wright",
-                  "message": "feat: Initial project structure for Assist CLI tool\n\nEstablish foundation for git repository management assistant with comprehensive\ndocumentation and Rust project setup.\n\n## Summary\n- Created complete project documentation (architecture, PRD, implementation plan)\n- Set up Rust project structure with CLI framework using clap\n- Configured dependencies for all planned features\n- Implemented basic command structure (scan, report, analyze, config, status)\n\n## Documentation\n- docs/architecture.md: System design with modular architecture, database schema,\n  and component descriptions\n- docs/PRD.md: Product requirements with functional/non-functional requirements,\n  use cases, and success metrics\n- docs/plan.md: 10-week implementation roadmap with sprint breakdown and milestones\n- README.md: User-facing documentation with installation and usage instructions\n\n## Technical Setup\n- Configured Cargo.toml with all necessary dependencies:\n  - CLI: clap for command parsing\n  - Database: sqlx with SQLite support\n  - Git: git2 for repository operations\n  - LLM: reqwest for Ollama API integration\n  - UI: indicatif, colored, comfy-table for terminal output\n- Implemented placeholder CLI commands with proper argument handling\n- Set up comprehensive .gitignore for Rust projects\n\n## Project Goals\nAssist will help manage multiple git repositories across different ownership\nstructures (personal vs business) and machines, providing:\n- Automatic repository discovery and tracking\n- Local SQLite database for metadata storage\n- LLM-powered project analysis via Ollama\n- Rich reporting capabilities\n- Multi-machine configuration support\n\nNext steps: Implement core modules following the architecture plan.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
-                  "sha": "ad69525baaa123cacf248db72333716bee4ee619"
-                },
-                {
-                  "authorEmail": "wrightmikea@gmail.com",
-                  "authorName": "Mike Wright",
-                  "authoredDate": "2025-09-28T17:39:43+00:00",
-                  "committedDate": "2025-09-28T17:39:43+00:00",
-                  "committerEmail": "wrightmikea@gmail.com",
-                  "committerName": "Mike Wright",
-                  "message": "1st",
-                  "sha": "50f755dac59ef85e18b03de05074a962cad7be0a"
-                }
-              ],
-              "lastCommitDate": "2025-11-15T20:13:25+00:00",
-              "name": "claude/update-research-preview-notes-01CkUK5S7Pfq6LcXqjNZDm7R",
-              "sha": "43b264739015dff94cec1d984385abca28905975",
+              "commits": [],
+              "lastCommitDate": "2025-08-27T21:33:40+00:00",
+              "name": "main",
+              "sha": "83ad978001e72a85357d780740ebf8f4c923136d",
               "status": "ReadyForPR"
-            },
+            }
+          ],
+          "id": "softwarewrighter/emacs-rust-menus",
+          "language": "Rust",
+          "lastPush": "2025-08-27T21:33:47+00:00",
+          "name": "emacs-rust-menus",
+          "owner": "softwarewrighter",
+          "prCount": 0,
+          "pullRequests": [],
+          "unmergedCount": 0
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "test",
+      "repos": [
+        {
+          "branches": [
             {
               "aheadBy": 0,
               "behindBy": 0,
               "commits": [],
-              "lastCommitDate": "2025-11-11T19:58:13+00:00",
+              "lastCommitDate": "2025-11-15T19:56:24+00:00",
               "name": "main",
-              "sha": "09195144d8b8fec974262d5ff8a0ea7da9d7c93d",
+              "sha": "66864f9032140be94dd0135968d0f6520d582624",
               "status": "ReadyForPR"
             }
           ],
-          "id": "softwarewrighter/assist",
+          "id": "softwarewrighter/scan3data",
           "language": "Rust",
-          "lastPush": "2025-11-15T20:13:35+00:00",
-          "name": "assist",
+          "lastPush": "2025-11-15T19:57:56+00:00",
+          "name": "scan3data",
           "owner": "softwarewrighter",
           "prCount": 0,
           "pullRequests": [],
-          "unmergedCount": 1
+          "unmergedCount": 0
         }
       ]
     }
@@ -997,6 +724,306 @@
       "prCount": 0,
       "pullRequests": [],
       "unmergedCount": 0
+    },
+    {
+      "branches": [
+        {
+          "aheadBy": 0,
+          "behindBy": 12,
+          "commits": [],
+          "lastCommitDate": "2025-11-10T13:15:53+00:00",
+          "name": "claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u",
+          "sha": "25c925f1978a40eba2ab0bd313c99a4277d8c709",
+          "status": "ReadyForPR"
+        },
+        {
+          "aheadBy": 1,
+          "behindBy": 0,
+          "commits": [
+            {
+              "authorEmail": "noreply@anthropic.com",
+              "authorName": "Claude",
+              "authoredDate": "2025-11-15T20:13:25+00:00",
+              "committedDate": "2025-11-15T20:13:25+00:00",
+              "committerEmail": "noreply@anthropic.com",
+              "committerName": "Claude",
+              "message": "docs: Add comprehensive research preview status notes\n\nCreated claude-web-research-preview-notes.md with:\n- Current implementation status and gap analysis\n- Completed features review (scanner, database, LLM, reporting)\n- Test coverage summary (64 tests passing)\n- Technical health assessment (~2,136 LOC)\n- Prioritized roadmap for next steps\n- Risk assessment and mitigation strategies\n\nKey findings:\n- Core MVP features 80% complete\n- All tests passing, code quality high\n- Ready for Priority 1: Polish and public release\n- Recommended focus: documentation, distribution, performance",
+              "sha": "43b264739015dff94cec1d984385abca28905975"
+            },
+            {
+              "authorEmail": "wrightmikea@gmail.com",
+              "authorName": "Mike Wright",
+              "authoredDate": "2025-11-11T19:58:13+00:00",
+              "committedDate": "2025-11-11T19:58:13+00:00",
+              "committerEmail": "wrightmikea@gmail.com",
+              "committerName": "Mike Wright",
+              "message": "refactor: Reduce function arguments using parameter structs\n\nProperly fixed the clippy::too_many_arguments warning by introducing\nparameter grouping structs instead of suppressing the warning.\n\nChanges:\n- Created CliContext struct to group verbose and dry_run flags\n- Created FilterOptions struct to group repository filter flags\n  (recent, stale, active, all)\n- Refactored handle_analyze_command from 8 params to 4 params\n- Refactored handle_scan_command from 4 params to 3 params\n- Refactored handle_report_command from 6 params to 3 params\n- Refactored handle_config_command from 3 params to 3 params (using ctx)\n- Refactored analyze_batch from 7 params to 3 params\n- Refactored analyze_single_repository from 4 params to 3 params\n- Removed #[allow(clippy::too_many_arguments)] directive\n\nAll functions now follow Rust best practices (≤7 parameters).\nAll tests pass and clippy reports zero warnings.\n\nThis eliminates technical debt from the previous commit where the\nwarning was only suppressed rather than properly addressed.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+              "sha": "09195144d8b8fec974262d5ff8a0ea7da9d7c93d"
+            },
+            {
+              "authorEmail": "wrightmikea@gmail.com",
+              "authorName": "Mike Wright",
+              "authoredDate": "2025-11-11T19:49:58+00:00",
+              "committedDate": "2025-11-11T19:49:58+00:00",
+              "committerEmail": "wrightmikea@gmail.com",
+              "committerName": "Mike Wright",
+              "message": "chore: Run cargo fmt and fix all clippy warnings\n\nApplied automated code quality improvements to meet Rust best practices:\n\nCode Formatting (cargo fmt):\n- Applied consistent formatting across all source files\n- Fixed line lengths and indentation\n- Reformatted long function calls and match statements\n\nClippy Fixes:\n- Removed redundant closures (use function directly in map_err)\n- Removed useless format! macro (use .to_string() or direct string)\n- Changed &PathBuf to &Path in function signatures (more idiomatic)\n- Used .flatten() instead of nested if-let for iterator unwrapping\n- Added #[allow(clippy::too_many_arguments)] for analyze command\n  (refactoring to reduce params would require larger structural changes)\n\nAll tests pass (64 tests) and code compiles without warnings.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+              "sha": "41770d1a1ed1fb0265e0978c6b1f37f01c2f32c3"
+            },
+            {
+              "authorEmail": "wrightmikea@gmail.com",
+              "authorName": "Mike Wright",
+              "authoredDate": "2025-11-11T19:43:18+00:00",
+              "committedDate": "2025-11-11T19:43:18+00:00",
+              "committerEmail": "wrightmikea@gmail.com",
+              "committerName": "Mike Wright",
+              "message": "fix: Canonicalize repository paths to prevent duplicates\n\nRepository paths are now canonicalized (converted to absolute paths)\nbefore being stored in the database. This prevents the same repository\nfrom being stored multiple times with different path representations\n(e.g., relative vs absolute paths like \"../assist\" vs\n\"/Users/mike/github/softwarewrighter/assist\").\n\nChanges:\n- GitAnalyzer now calls path.canonicalize() before storing\n- All paths in the database are now consistent absolute paths\n- Eliminates duplicate entries in reports and database queries\n- Added .claude/ to .gitignore for local settings\n\nTesting:\n- All existing tests pass\n- Verified that rescanning eliminates duplicates (28→27 repos)\n- Active repos report reduced from 12→11 (duplicate removed)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+              "sha": "a335f633bba3ef957c41b319fb7da247f23d6d44"
+            },
+            {
+              "authorEmail": "wrightmikea@gmail.com",
+              "authorName": "Mike Wright",
+              "authoredDate": "2025-11-11T19:31:52+00:00",
+              "committedDate": "2025-11-11T19:31:52+00:00",
+              "committerEmail": "wrightmikea@gmail.com",
+              "committerName": "Mike Wright",
+              "message": "feat: Add dry-run mode (-n/--dry-run) to prevent destructive operations\n\nImplements a comprehensive dry-run mode that shows what would be done\nwithout actually making changes. This is useful for verifying commands\nbefore execution, especially for database writes and LLM API calls.\n\nFeatures:\n- Global -n/--dry-run flag available on all commands\n- Visual indicator (🔍 DRY-RUN MODE) when enabled\n- Scan command: Shows repositories that would be stored in database\n- Analyze command: Shows LLM analysis plan without API calls\n  - Single repo: Shows Ollama connection details and analysis plan\n  - Batch mode: Lists all repos that would be analyzed\n- Config --edit: Shows editor that would be opened without launching it\n\nAll database writes and LLM API calls are skipped in dry-run mode,\nwhile repository discovery and validation still occur to provide\naccurate preview of what would happen.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+              "sha": "22e66be575aaf29661666e3305c4e99c1696f37c"
+            },
+            {
+              "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
+              "authorName": "softwarewrighter",
+              "authoredDate": "2025-11-10T13:18:57+00:00",
+              "committedDate": "2025-11-10T13:18:57+00:00",
+              "committerEmail": "noreply@github.com",
+              "committerName": "GitHub",
+              "message": "Merge pull request #8 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nClaude/summarize project purpose 011 c uz6rxmwe3p n7jk6 ht d6u",
+              "sha": "bf5782689e9bc9df6b8807cfd5845369e03c1253"
+            },
+            {
+              "authorEmail": "noreply@anthropic.com",
+              "authorName": "Claude",
+              "authoredDate": "2025-11-10T13:15:53+00:00",
+              "committedDate": "2025-11-10T13:15:53+00:00",
+              "committerEmail": "noreply@anthropic.com",
+              "committerName": "Claude",
+              "message": "feat: Add batch analysis support to analyze command\n\nExtended the analyze command to support batch analysis with filters:\n\n**New Batch Analysis Modes:**\n- `assist analyze --recent` - Batch analyze recently active repos\n- `assist analyze --stale` - Batch analyze stale repos\n- `assist analyze --active` - Batch analyze repos with uncommitted changes\n- `assist analyze --all` - Batch analyze all repos\n\n**Features:**\n- Smart skipping: Won't re-analyze unless --force is specified\n- Progress tracking: Shows [1/10], [2/10], etc. as it processes\n- Summary report: Shows analyzed, skipped, and error counts\n- Respects max_repos_in_summary configuration limit\n- Silent analysis mode (verbose=false) for batch operations\n\n**Single Repo Mode (unchanged):**\n- `assist analyze ~/path/to/repo` - Analyze single repository\n- `assist analyze ~/path/to/repo --force` - Force re-analysis\n\n**Example Output:**\n```\nBatch Analysis: 5 repositories\n\n[1/5] Analyzing: assist\n   Already analyzed (use --force to re-analyze)\n\n[2/5] Analyzing: my-app\nChecking Ollama connection...\nConnected to Ollama using model: llama3.2\nGenerating analysis...\nAnalysis complete!\n\n============================================================\nBatch Analysis Complete\n  Analyzed: 4\n  Skipped:  1\n```\n\nAll 64 tests passing.",
+              "sha": "25c925f1978a40eba2ab0bd313c99a4277d8c709"
+            },
+            {
+              "authorEmail": "noreply@anthropic.com",
+              "authorName": "Claude",
+              "authoredDate": "2025-11-10T12:47:11+00:00",
+              "committedDate": "2025-11-10T12:47:11+00:00",
+              "committerEmail": "noreply@anthropic.com",
+              "committerName": "Claude",
+              "message": "fix: Enhance --active flag with detailed status and explanations\n\nFixed and enhanced the --active flag to properly detect and explain repository activity:\n\n**Bug Fix:**\n- Fixed has_uncommitted_changes() to correctly filter out IGNORED and CURRENT files\n- Now properly identifies only repos with actual changes\n\n**Enhanced Status Detection:**\n- Created RepoStatus struct with comprehensive status information:\n  * Untracked files count\n  * Modified tracked files count\n  * Staged files count\n  * Current branch name\n  * Upstream tracking branch\n  * Commits ahead of upstream\n  * Commits behind upstream\n\n- get_detailed_status() method captures full git status\n- is_active() checks for any form of activity\n- get_activity_summary() provides human-readable reasons\n\n**Enhanced Report Output:**\nFor --active reports, now shows:\n- Why each repository is considered active\n- One-line status summary (e.g., \"2 modified files, 1 commit ahead\")\n- Branch tracking information with upstream\n- Separate formatting for terminal, JSON, and Markdown\n\n**Example Output:**\n```\nActive Repositories\n2 repositories with uncommitted changes or divergence\n\n1. assist (softwarewrighter)\n   Path: /Users/mike/github/assist\n   Status: 2 modified files, 1 staged file, 3 commits ahead of upstream\n   Branch: main -> origin/main\n   Last Commit: 2025-01-10 14:23:45 (0 days ago)\n```\n\nAll 64 tests passing.",
+              "sha": "81dd95027a28f321bbcbccbc81297cbc804736da"
+            },
+            {
+              "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
+              "authorName": "softwarewrighter",
+              "authoredDate": "2025-11-10T12:36:43+00:00",
+              "committedDate": "2025-11-10T12:36:43+00:00",
+              "committerEmail": "noreply@github.com",
+              "committerName": "GitHub",
+              "message": "Merge pull request #7 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfeat: Implement --active flag and analyze command with Ollama",
+              "sha": "d0b74279fe66fe9be316b1a60c81ffe497e6793d"
+            },
+            {
+              "authorEmail": "noreply@anthropic.com",
+              "authorName": "Claude",
+              "authoredDate": "2025-11-10T12:30:50+00:00",
+              "committedDate": "2025-11-10T12:30:50+00:00",
+              "committerEmail": "noreply@anthropic.com",
+              "committerName": "Claude",
+              "message": "feat: Implement --active flag and analyze command with Ollama\n\nImplemented full analyze functionality:\n\n**--active flag for report command:**\n- Dynamically checks all repositories for uncommitted changes\n- Uses GitAnalyzer.has_uncommitted_changes() to detect modified files\n- Filters repositories with uncommitted changes\n- Respects max_repos_in_summary configuration limit\n\n**Ollama LLM integration:**\n- Created llm module with OllamaClient\n- Health check to verify Ollama connectivity\n- Repository analysis with context from README and recent commits\n- Configurable model and host settings\n- 120-second timeout for LLM operations\n\n**Analyze command:**\n- Analyzes single repository at specified path\n- Reads README file (up to 2000 chars) for context\n- Extracts last 10 commit messages for recent activity\n- Connects to Ollama to generate comprehensive analysis\n- Stores analysis in database with timestamps\n- Prevents duplicate analysis unless --force is used\n- Verbose mode for debugging Ollama connection\n- Pretty-printed results with model and date information\n\n**Database integration:**\n- Automatically adds repository to database if not present\n- Links analysis to repository record\n- Retrieves cached analysis on subsequent runs\n\nAll 64 tests passing.",
+              "sha": "4a83eed6809e770c7bf33838d3b5141c03942e0b"
+            },
+            {
+              "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
+              "authorName": "softwarewrighter",
+              "authoredDate": "2025-11-10T12:21:17+00:00",
+              "committedDate": "2025-11-10T12:21:17+00:00",
+              "committerEmail": "noreply@github.com",
+              "committerName": "GitHub",
+              "message": "Merge pull request #6 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfeat: Implement report command with multiple output formats",
+              "sha": "b0f44af7b52f00756016369104087f1f0b70b0a3"
+            },
+            {
+              "authorEmail": "noreply@anthropic.com",
+              "authorName": "Claude",
+              "authoredDate": "2025-11-10T12:15:53+00:00",
+              "committedDate": "2025-11-10T12:15:53+00:00",
+              "committerEmail": "noreply@anthropic.com",
+              "committerName": "Claude",
+              "message": "feat: Implement report command with multiple output formats\n\nAdded comprehensive report functionality:\n\n- Database methods:\n  - Added get_all_repositories() method to fetch all repos with optional limit\n\n- Report command features:\n  - --recent: Show recently active projects (within configured days)\n  - --stale: Show stale projects (no commits in configured days)\n  - --active: Placeholder for uncommitted changes (shows all for now)\n  - --all: Show all repositories without filters\n  - Default behavior: Show recent repositories\n\n- Output formats:\n  - Terminal: Colorized, formatted list with details\n  - JSON: Machine-readable structured output\n  - Markdown: Documentation-friendly format\n\n- Uses configuration settings:\n  - reporting.days_for_recent: Days to consider recent\n  - reporting.max_repos_in_summary: Maximum repos to show\n\nAll tests passing (62 tests).",
+              "sha": "8ec93808363958a905e32e374b997a1567d0ad30"
+            },
+            {
+              "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
+              "authorName": "softwarewrighter",
+              "authoredDate": "2025-11-10T12:12:03+00:00",
+              "committedDate": "2025-11-10T12:12:03+00:00",
+              "committerEmail": "noreply@github.com",
+              "committerName": "GitHub",
+              "message": "Merge pull request #5 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfeat: Add comprehensive diagnostics for database file creation",
+              "sha": "5059a817b5db8fe5fb07b8c70fd6fc6cc844619c"
+            },
+            {
+              "authorEmail": "noreply@anthropic.com",
+              "authorName": "Claude",
+              "authoredDate": "2025-11-10T12:11:05+00:00",
+              "committedDate": "2025-11-10T12:11:05+00:00",
+              "committerEmail": "noreply@anthropic.com",
+              "committerName": "Claude",
+              "message": "feat: Add comprehensive diagnostics for database file creation\n\nAdded detailed debugging output to identify SQLite connection issues:\n- Check directory permissions and metadata\n- Test write permissions by creating a test file\n- Attempt to manually create database file if it doesn't exist\n\nThis will help identify whether the issue is:\n- Permission-related\n- SQLite library issue\n- File system access problem",
+              "sha": "bd1d7faafa47e8988b2264ea4dc63f064e7fd8e8"
+            },
+            {
+              "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
+              "authorName": "softwarewrighter",
+              "authoredDate": "2025-11-10T12:07:36+00:00",
+              "committedDate": "2025-11-10T12:07:36+00:00",
+              "committerEmail": "noreply@github.com",
+              "committerName": "GitHub",
+              "message": "Merge pull request #4 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfeat: Add verbose flag for detailed debugging output",
+              "sha": "cf13ae4085317207979d1ac09166248e5b94f92e"
+            },
+            {
+              "authorEmail": "noreply@anthropic.com",
+              "authorName": "Claude",
+              "authoredDate": "2025-11-10T12:06:30+00:00",
+              "committedDate": "2025-11-10T12:06:30+00:00",
+              "committerEmail": "noreply@anthropic.com",
+              "committerName": "Claude",
+              "message": "feat: Add verbose flag for detailed debugging output\n\nAdds -v/--verbose flag to all commands (global flag). When used with\n'scan', it shows:\n- Configuration loading steps\n- Database path and URL generation\n- Exact SQLite connection string\n- File permissions and existence checks\n- Step-by-step progress through scanning\n- Detailed error information\n\nUsage: cargo run -- scan -v\n\nThis will help diagnose the database connection issue by showing\nexactly what URL is being generated and where the error occurs.",
+              "sha": "31325da9d17ac2fe82836cde96b2ca60cbb37c31"
+            },
+            {
+              "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
+              "authorName": "softwarewrighter",
+              "authoredDate": "2025-11-10T12:03:45+00:00",
+              "committedDate": "2025-11-10T12:03:45+00:00",
+              "committerEmail": "noreply@github.com",
+              "committerName": "GitHub",
+              "message": "Merge pull request #3 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfix: Correct SQLite URL format to avoid four slashes",
+              "sha": "0cbe45aefd14ad585d039af2cd9258eeb9653ead"
+            },
+            {
+              "authorEmail": "noreply@anthropic.com",
+              "authorName": "Claude",
+              "authoredDate": "2025-11-10T12:01:33+00:00",
+              "committedDate": "2025-11-10T12:01:33+00:00",
+              "committerEmail": "noreply@anthropic.com",
+              "committerName": "Claude",
+              "message": "fix: Correct SQLite URL format to avoid four slashes\n\nThe previous fix used sqlite:///{path} which resulted in four slashes\nfor Unix absolute paths (e.g., sqlite:////Users/mike/db.sqlite).\n\nThe correct format is sqlite://{path} which gives:\n- sqlite:///Users/mike/db.sqlite (3 slashes) for absolute paths\n- sqlite://./relative.db (2 slashes) for relative paths\n\nThis fixes the 'unable to open database file' error on macOS/Unix.",
+              "sha": "b3f178b57ce0ef93e30acdd03c02704ac56a73c7"
+            },
+            {
+              "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
+              "authorName": "softwarewrighter",
+              "authoredDate": "2025-11-10T11:57:11+00:00",
+              "committedDate": "2025-11-10T11:57:11+00:00",
+              "committerEmail": "noreply@github.com",
+              "committerName": "GitHub",
+              "message": "Merge pull request #2 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nfix: Use correct SQLite URL format for absolute paths",
+              "sha": "5e4ee3c112be10187b8e5e7852c96a3ea00a57e0"
+            },
+            {
+              "authorEmail": "noreply@anthropic.com",
+              "authorName": "Claude",
+              "authoredDate": "2025-11-10T11:54:41+00:00",
+              "committedDate": "2025-11-10T11:54:41+00:00",
+              "committerEmail": "noreply@anthropic.com",
+              "committerName": "Claude",
+              "message": "fix: Use correct SQLite URL format for absolute paths\n\nSQLite URLs require three slashes (sqlite:///) for absolute paths\nand two slashes (sqlite://) for relative paths. This fixes the\n'unable to open database file' error when running assist scan.\n\nFixes database connection issues on macOS and other systems where\nthe database is stored at an absolute path like ~/.assist/assist.db",
+              "sha": "56f770f9af38b04c797588185dd866a4d1a37ae6"
+            },
+            {
+              "authorEmail": "153049380+softwarewrighter@users.noreply.github.com",
+              "authorName": "softwarewrighter",
+              "authoredDate": "2025-11-10T11:27:21+00:00",
+              "committedDate": "2025-11-10T11:27:21+00:00",
+              "committerEmail": "noreply@github.com",
+              "committerName": "GitHub",
+              "message": "Merge pull request #1 from softwarewrighter/claude/summarize-project-purpose-011CUz6rxmwe3pN7jk6HtD6u\n\nDocument Project Purpose Summary",
+              "sha": "8282adef224094ad82170e84250071d269cec721"
+            },
+            {
+              "authorEmail": "noreply@anthropic.com",
+              "authorName": "Claude",
+              "authoredDate": "2025-11-10T11:24:46+00:00",
+              "committedDate": "2025-11-10T11:24:46+00:00",
+              "committerEmail": "noreply@anthropic.com",
+              "committerName": "Claude",
+              "message": "feat: Implement config, status, and scan commands with scanner module\n\n- Implemented config command with show and edit functionality\n- Implemented status command showing database and config status\n- Built complete scanner module for git repository detection\n  - Walker for traversing directories and finding repos\n  - GitAnalyzer for extracting repository metadata\n  - Scanner for orchestrating discovery and analysis\n- Implemented scan command that discovers repos and stores in database\n- All 62 tests passing (43 existing + 19 new scanner tests)\n- Fixed path traversal to handle hidden root directories\n- Integrated scanner with database for persistent storage\n\nComponents ready for production:\n- Configuration management (TOML-based)\n- Database layer (SQLite with migrations)\n- Git repository scanning and metadata extraction\n- CLI commands: config, status, scan",
+              "sha": "ab305cae9676980fb598ac5e7a9842d549f2ad49"
+            },
+            {
+              "authorEmail": "wrightmikea@gmail.com",
+              "authorName": "Mike Wright",
+              "authoredDate": "2025-09-28T18:03:29+00:00",
+              "committedDate": "2025-09-28T18:03:29+00:00",
+              "committerEmail": "wrightmikea@gmail.com",
+              "committerName": "Mike Wright",
+              "message": "docs: Add comprehensive usage guide\n\nCreated detailed user documentation covering:\n- Installation and initial setup instructions\n- Configuration for different machines and ownership structures\n- All core commands with examples and expected output\n- Common workflows (daily status, weekly review, project recovery)\n- Advanced usage with jq, fzf, and database queries\n- Integration with other tools (Alfred, cron, git hooks)\n- Troubleshooting guide and performance tuning\n- Real-world examples and best practices\n\nThe guide provides practical examples for both personal (wrightmikea) and business (softwarewrighter) repository management across multiple machines.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+              "sha": "59d45727a4c83803a9438248f8d472d23a578ff7"
+            },
+            {
+              "authorEmail": "wrightmikea@gmail.com",
+              "authorName": "Mike Wright",
+              "authoredDate": "2025-09-28T18:00:57+00:00",
+              "committedDate": "2025-09-28T18:00:57+00:00",
+              "committerEmail": "wrightmikea@gmail.com",
+              "committerName": "Mike Wright",
+              "message": "feat: Implement TDD foundation with config and database modules\n\nEstablished Test-Driven Development workflow and implemented core modules\nfollowing red-green-refactor cycle with comprehensive test coverage.\n\n## Development Process Documentation\n- Created docs/process.md with TDD methodology and best practices\n- Defined red-green-refactor cycle workflow\n- Established code quality standards and CI/CD guidelines\n- Added pre-commit checks and security checklist\n\n## Test Infrastructure\n- Set up test_helpers module with utilities for:\n  - Creating test git repositories with various states\n  - Mock database setup\n  - Test configuration generation\n  - Mock Ollama responses\n\n## Error Handling Module\n- Comprehensive error types with thiserror\n- Context wrapping for better error messages\n- Type conversions for external error types\n- 100% test coverage\n\n## Configuration Module (12 tests, all passing)\n- TOML-based configuration parsing and validation\n- Support for multiple ownership structures (personal/business)\n- Path expansion for home directory\n- Ollama server configuration with failover support\n- Default values with override capabilities\n- Fixed clippy warnings (renamed from_str to from_toml_str)\n\n## Database Module (22 tests, all passing)\n- SQLite integration with sqlx\n- Three core tables: repositories, analyses, scan_history\n- Full CRUD operations for repository management\n- Analysis storage with LLM results\n- Scan history tracking\n- Connection pooling and health checks\n- Support for in-memory databases (testing)\n- Fixed chrono DateTime binding issues\n\n## Code Quality\n- All modules pass clippy with no warnings\n- Consistent error handling patterns\n- Comprehensive documentation with examples\n- Following Rust API guidelines\n\nNext steps: Implement scanner module for git repository discovery.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+              "sha": "6a58af6223922887a387d6b15fd526d27f2b3a04"
+            },
+            {
+              "authorEmail": "wrightmikea@gmail.com",
+              "authorName": "Mike Wright",
+              "authoredDate": "2025-09-28T17:48:57+00:00",
+              "committedDate": "2025-09-28T17:48:57+00:00",
+              "committerEmail": "wrightmikea@gmail.com",
+              "committerName": "Mike Wright",
+              "message": "feat: Initial project structure for Assist CLI tool\n\nEstablish foundation for git repository management assistant with comprehensive\ndocumentation and Rust project setup.\n\n## Summary\n- Created complete project documentation (architecture, PRD, implementation plan)\n- Set up Rust project structure with CLI framework using clap\n- Configured dependencies for all planned features\n- Implemented basic command structure (scan, report, analyze, config, status)\n\n## Documentation\n- docs/architecture.md: System design with modular architecture, database schema,\n  and component descriptions\n- docs/PRD.md: Product requirements with functional/non-functional requirements,\n  use cases, and success metrics\n- docs/plan.md: 10-week implementation roadmap with sprint breakdown and milestones\n- README.md: User-facing documentation with installation and usage instructions\n\n## Technical Setup\n- Configured Cargo.toml with all necessary dependencies:\n  - CLI: clap for command parsing\n  - Database: sqlx with SQLite support\n  - Git: git2 for repository operations\n  - LLM: reqwest for Ollama API integration\n  - UI: indicatif, colored, comfy-table for terminal output\n- Implemented placeholder CLI commands with proper argument handling\n- Set up comprehensive .gitignore for Rust projects\n\n## Project Goals\nAssist will help manage multiple git repositories across different ownership\nstructures (personal vs business) and machines, providing:\n- Automatic repository discovery and tracking\n- Local SQLite database for metadata storage\n- LLM-powered project analysis via Ollama\n- Rich reporting capabilities\n- Multi-machine configuration support\n\nNext steps: Implement core modules following the architecture plan.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+              "sha": "ad69525baaa123cacf248db72333716bee4ee619"
+            },
+            {
+              "authorEmail": "wrightmikea@gmail.com",
+              "authorName": "Mike Wright",
+              "authoredDate": "2025-09-28T17:39:43+00:00",
+              "committedDate": "2025-09-28T17:39:43+00:00",
+              "committerEmail": "wrightmikea@gmail.com",
+              "committerName": "Mike Wright",
+              "message": "1st",
+              "sha": "50f755dac59ef85e18b03de05074a962cad7be0a"
+            }
+          ],
+          "lastCommitDate": "2025-11-15T20:13:25+00:00",
+          "name": "claude/update-research-preview-notes-01CkUK5S7Pfq6LcXqjNZDm7R",
+          "sha": "43b264739015dff94cec1d984385abca28905975",
+          "status": "ReadyForPR"
+        },
+        {
+          "aheadBy": 0,
+          "behindBy": 0,
+          "commits": [],
+          "lastCommitDate": "2025-11-11T19:58:13+00:00",
+          "name": "main",
+          "sha": "09195144d8b8fec974262d5ff8a0ea7da9d7c93d",
+          "status": "ReadyForPR"
+        }
+      ],
+      "id": "softwarewrighter/assist",
+      "language": "Rust",
+      "lastPush": "2025-11-15T20:13:35+00:00",
+      "name": "assist",
+      "owner": "softwarewrighter",
+      "prCount": 0,
+      "pullRequests": [],
+      "unmergedCount": 1
     },
     {
       "branches": [
@@ -1217,27 +1244,6 @@
       "prCount": 0,
       "pullRequests": [],
       "unmergedCount": 1
-    },
-    {
-      "branches": [
-        {
-          "aheadBy": 0,
-          "behindBy": 0,
-          "commits": [],
-          "lastCommitDate": "2025-11-15T19:56:24+00:00",
-          "name": "main",
-          "sha": "66864f9032140be94dd0135968d0f6520d582624",
-          "status": "ReadyForPR"
-        }
-      ],
-      "id": "softwarewrighter/scan3data",
-      "language": "Rust",
-      "lastPush": "2025-11-15T19:57:56+00:00",
-      "name": "scan3data",
-      "owner": "softwarewrighter",
-      "prCount": 0,
-      "pullRequests": [],
-      "unmergedCount": 0
     },
     {
       "branches": [

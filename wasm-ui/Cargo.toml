@@ -23,6 +23,9 @@ yew-router = { workspace = true }
 # Additional WASM dependencies
 wasm-bindgen-futures = "0.4"
 
+[build-dependencies]
+chrono = { workspace = true }
+
 [profile.release]
 opt-level = 'z'
 lto = true

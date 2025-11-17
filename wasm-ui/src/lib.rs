@@ -5,9 +5,6 @@
 use yew::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-use wasm_bindgen::JsCast;
-
-#[cfg(target_arch = "wasm32")]
 #[derive(Clone, PartialEq)]
 struct Repository {
     id: String,
@@ -225,8 +222,30 @@ fn app() -> Html {
 
     let on_repo_click = {
         let selected_repo = selected_repo.clone();
+        let groups = groups.clone();
+        let local_repo_statuses = local_repo_statuses.clone();
         Callback::from(move |repo: Repository| {
+            // Set selected repo immediately to show dialog
             selected_repo.set(Some(repo));
+
+            // Refresh data in background
+            let groups = groups.clone();
+            let local_repo_statuses = local_repo_statuses.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                // Reload repo data
+                if let Ok(loaded_groups) = fetch_repos().await {
+                    groups.set(loaded_groups);
+                }
+
+                // Reload local repo statuses
+                if let Ok(statuses) = fetch_local_repo_statuses().await {
+                    let status_map: std::collections::HashMap<String, LocalRepoStatus> = statuses
+                        .into_iter()
+                        .map(|s| (s.repo_id.clone(), s))
+                        .collect();
+                    local_repo_statuses.set(status_map);
+                }
+            });
         })
     };
 
@@ -1514,6 +1533,7 @@ fn settings_dialog(props: &SettingsDialogProps) -> Html {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[cfg(test)]
 fn get_mock_groups() -> Vec<RepoGroup> {
     vec![
         RepoGroup {

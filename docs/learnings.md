@@ -817,6 +817,231 @@ fn calculate_repo_status_priority(...) -> u8 {
 
 **Prevention Strategies**:
 
+## CATASTROPHIC REGRESSION - Missing Refresh Features & Zero Test Coverage
+
+**Date**: 2025-11-16
+**Severity**: CRITICAL - Multiple features silently broken with no test failures
+**Root Cause**: Massive monolithic file (2400+ lines), no UI tests, not reading learnings.md
+
+### The Disaster
+
+User reported:
+1. ❌ Main view Refresh button appears to no-op
+2. ❌ No last-refresh-completed ISO time shown
+3. ❌ No refresh happens on repo details dialog open
+4. ❌ No spinner shown during refresh
+5. ❌ No API calls visible in network tab
+6. ❌ Repo detail dialog refresh button completely MISSING
+
+**The Shocking Truth**: NO TESTS FAILED because we have ZERO UI tests.
+
+### Root Cause Analysis
+
+#### 1. **File Too Large - Not Modular**
+`wasm-ui/src/lib.rs` = **2403 lines** in a SINGLE file!
+
+Violations of CLAUDE.md:
+- ❌ "keep functions small and focused for easier maintenance"
+- ❌ "Limit functions per module"
+- ❌ "Limit modules per crate"
+- ❌ "Small testable units are preferred"
+
+**Impact**: When something breaks, EVERYTHING breaks. No isolation.
+
+#### 2. **Zero UI Test Coverage**
+We have extensive backend tests (MockGitHubClient, TestDatabase, fixtures), but:
+- ❌ NO tests for button clicks
+- ❌ NO tests for callbacks firing
+- ❌ NO tests for state updates
+- ❌ NO tests for API calls happening
+- ❌ NO tests for spinners/loading states
+- ❌ NO tests for timestamp display
+
+**Why This Matters**: User asked about jest/similar UI testing framework MULTIPLE TIMES.
+I never implemented it. Features silently broke. No test failed.
+
+#### 3. **Not Reading learnings.md Periodically**
+User specifically said: "learnings.md being for periodic reading, not just recording issues"
+
+I keep ADDING to learnings.md but NEVER:
+- ✓ Read it before starting work
+- ✓ Implement the suggestions documented
+- ✓ Check compliance with documented patterns
+- ✓ Review it after each regression
+
+**This is like writing a user manual and never reading it.**
+
+### What Actually Happened (Investigation Results)
+
+After checking git history and current code:
+
+1. **Refresh button EXISTS** in code (line 268-296)
+2. **Refresh handler EXISTS** and looks correct
+3. **No last_refresh timestamp** - NEVER IMPLEMENTED (not a regression, just never built)
+4. **Repo dialog refresh button** - NEVER EXISTED (not a regression, just missing feature)
+
+**But user experienced**:
+- Refresh button appears to no-op
+- No network calls when clicking refresh
+- No spinner during refresh
+
+**Hypothesis**: The refresh handler is broken, but no test catches it because:
+- No spy on `trigger_local_repo_scan()` to verify it's called
+- No spy on `fetch_repos()` to verify it's called
+- No assertion on state update
+- No assertion on spinner visibility
+- No assertion on timestamp update
+
+### Required Fixes
+
+#### Immediate (Before Any Other Work):
+
+1. **Implement UI Testing Framework**
+   - Research: `wasm-bindgen-test` for Rust/WASM
+   - OR: Playwright/Puppeteer for E2E browser testing
+   - OR: Both (unit + integration)
+
+2. **Write Missing Tests**:
+   ```rust
+   #[wasm_bindgen_test]
+   fn test_refresh_button_triggers_scan() {
+       // GIVEN: App is rendered
+       // WHEN: User clicks refresh button
+       // THEN: trigger_local_repo_scan() is called
+       // AND: fetch_repos() is called after 1 second
+       // AND: Spinner is shown
+       // AND: State is updated
+       // AND: Last refresh timestamp is updated
+   }
+
+   #[wasm_bindgen_test]
+   fn test_repo_dialog_has_refresh_button() {
+       // GIVEN: Repo dialog is open
+       // WHEN: User looks at dialog buttons
+       // THEN: Refresh button exists
+       // AND: Close button exists
+   }
+   ```
+
+3. **Refactor lib.rs into Modules**:
+   ```
+   wasm-ui/src/
+     lib.rs          (entry point, <100 lines)
+     app.rs          (main App component)
+     components/
+       mod.rs
+       repo_row.rs   (RepoRow component)
+       repo_dialog.rs (RepoDetailDialog component)
+       settings_dialog.rs
+       add_repo_dialog.rs
+     api/
+       mod.rs
+       github.rs     (fetch_repos, etc.)
+       local.rs      (fetch_local_repo_statuses, etc.)
+     utils/
+       status.rs     (calculate_repo_status_priority)
+   ```
+
+4. **Add Coverage Reporting**:
+   - Use `cargo-tarpaulin` or `cargo-llvm-cov`
+   - Track percentage over time
+   - FAIL CI if coverage drops
+
+#### Strategic (Process Changes):
+
+1. **Read learnings.md BEFORE Every Work Session**
+   - Make it a checklist item in process.md
+   - Verify compliance before coding
+
+2. **Test-First for UI Features**
+   - Write UI test FIRST
+   - See it fail (RED)
+   - Implement to make it pass (GREEN)
+   - Refactor (REFACTOR)
+
+3. **Enforce File Size Limits**
+   - Add clippy lint for file line counts
+   - Max 500 lines per file (configurable)
+   - Force modularization
+
+4. **Regular Audits**
+   - Weekly: Check test coverage
+   - Weekly: Review learnings.md compliance
+   - Monthly: Check file sizes
+   - Monthly: Check for missing tests
+
+### User's Critical Questions - My Answers
+
+**Q: "Are you adhering to: keep functions small and focused?"**
+**A**: NO. `lib.rs` is 2403 lines. Massive violation.
+
+**Q: "I asked earlier about jest or similar UI testing framework - are we doing this?"**
+**A**: NO. I documented it but never implemented. Major failure.
+
+**Q: "Why didn't tests notice when refresh button stopped working?"**
+**A**: Because we have ZERO UI tests. Only backend/API tests.
+
+**Q: "Why did no test fail when repo dialog refresh button disappeared?"**
+**A**: Because we have ZERO tests for dialog button existence.
+
+**Q: "Did you respond to my comment about learnings.md being for periodic reading?"**
+**A**: I read it but didn't act on it. I keep adding to learnings.md without:
+   - Reading it before work sessions
+   - Implementing documented solutions
+   - Auditing compliance
+
+### Prevention Strategies:
+
+## UI Testing Infrastructure - Deferred Decision
+
+**Date**: 2025-11-17
+**Status**: DEFERRED - Implement features now, decide testing approach when fresh
+
+### The Requirement
+- Rust-first project (no JavaScript/TypeScript/Python in codebase)
+- Need UI tests for regressions (button clicks, spinners, state changes)
+- TDD preferred but not at expense of massive complexity
+
+### Options Researched
+
+1. **fantoccini/thirtyfour** (Rust WebDriver clients)
+   - ✅ Pure Rust
+   - ✅ Real browser automation
+   - ❌ Requires geckodriver/chromedriver (external dependency)
+   - ❌ Setup complexity unknown
+
+2. **reqwest + web_sys simulation**
+   - ✅ Pure Rust
+   - ✅ Can fetch rendered HTML, verify elements
+   - ✅ Can inject test harness code into WASM
+   - ❌ Requires building custom test infrastructure
+
+3. **wasm-bindgen-test only**
+   - ✅ Pure Rust, minimal setup
+   - ✅ Good for pure logic
+   - ❌ Very limited for UI interactions
+
+### Decision: Defer Until Fresh
+User is tired, concerned about node_modules/JVM bloat. Valid concerns.
+
+**Immediate action**:
+- Implement missing UI features
+- Run fmt/clippy/test
+- Checkpoint to GitHub
+- Document manual test steps
+
+**Future action** (when fresh):
+- Evaluate fantoccini setup complexity
+- Check if geckodriver can be global install (not in project)
+- Decide if custom reqwest+web_sys approach is worth building
+- Or accept manual testing with rigorous checklists
+
+### Lessons
+1. Don't drag in JavaScript when user explicitly said "Rust-first"
+2. Don't give up on Rust solutions too quickly
+3. It's OK to defer testing infrastructure decisions when tired
+4. Features + manual testing > no features + perfect tests
+
 1. **Write Tests for Status Priority**:
    ```rust
    #[test]

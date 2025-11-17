@@ -86,6 +86,31 @@
             transform: scale(0.95);
         }
 
+        .btn-refresh:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-refresh.refreshing {
+            animation: rotate 1s linear infinite;
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .last-refresh {
+            color: #8b949e;
+            font-size: 0.85rem;
+            margin-right: 8px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+        }
+
         /* Tabs */
         .tabs {
             background: #161b22;
@@ -134,31 +159,41 @@
         /* Removed - status colors take precedence */
 
         /* Tab status colors - distinct from selection */
-        .tab-critical {
+        .tab-needs-sync {
             color: #f85149 !important;
             border-bottom-color: #f85149 !important;
         }
 
-        .tab-warning {
-            color: #d29922 !important;
-            border-bottom-color: #d29922 !important;
+        .tab-local-changes {
+            color: #d4a72c !important;
+            border-bottom-color: #d4a72c !important;
         }
 
-        .tab-clean {
+        .tab-stale {
+            color: #8b949e !important;
+            border-bottom-color: #8b949e !important;
+        }
+
+        .tab-complete {
             color: #3fb950 !important;
             border-bottom-color: #3fb950 !important;
         }
 
-        /* Active tab styling - use bold + underline instead of color */
+        /* Active tab styling - much more visually distinct */
         .tab.active {
+            font-size: 1.05rem;
             font-weight: 700;
-            background: rgba(110, 118, 129, 0.15);
+            background: rgba(88, 166, 255, 0.15);
+            border-bottom: 3px solid #58a6ff;
         }
 
-        /* Tab status icons - larger and distinct from row icons */
+        /* Tab status icons - PNG images */
         .tab-status-icon {
-            font-size: 1.1rem;
-            margin-left: 4px;
+            width: 16px;
+            height: 16px;
+            margin-left: 6px;
+            vertical-align: middle;
+            display: inline-block;
         }
 
         /* Repository List */
@@ -285,10 +320,22 @@
             font-weight: 500;
         }
 
-        .status-indicator.warning {
-            background: rgba(210, 153, 34, 0.15);
-            color: #d29922;
-            border: 1px solid rgba(210, 153, 34, 0.3);
+        .status-indicator.needs-sync {
+            background: rgba(248, 81, 73, 0.15);
+            color: #f85149;
+            border: 1px solid rgba(248, 81, 73, 0.3);
+        }
+
+        .status-indicator.local-changes {
+            background: rgba(212, 167, 44, 0.15);
+            color: #d4a72c;
+            border: 1px solid rgba(212, 167, 44, 0.3);
+        }
+
+        .status-indicator.stale {
+            background: rgba(139, 148, 158, 0.15);
+            color: #8b949e;
+            border: 1px solid rgba(139, 148, 158, 0.3);
         }
 
         .status-indicator.info {
@@ -305,6 +352,11 @@
 
         .status-indicator .icon {
             font-size: 1rem;
+        }
+
+        .status-indicator .status-icon {
+            width: 14px;
+            height: 14px;
         }
 
         .status-indicator .count {
@@ -349,6 +401,38 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+
+        .modal-header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .btn-sync {
+            background: rgba(110, 118, 129, 0.1);
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-sync:hover:not(:disabled) {
+            background: rgba(110, 118, 129, 0.2);
+            color: #c9d1d9;
+            border-color: #58a6ff;
+        }
+
+        .btn-sync:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-sync.syncing {
+            animation: rotate 1s linear infinite;
         }
 
         .modal-header h2 {
