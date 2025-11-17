@@ -561,6 +561,234 @@ fn test_sync_removes_deleted_branches() {
 - Erodes trust in the entire application
 - Can cause cascading errors (trying to create PRs for deleted branches)
 
+### 2025-11-17: Missing WASM Build - CRITICAL PROCESS FAILURE
+
+**What Happened**:
+- Made changes to `wasm-ui/src/lib.rs` fixing status priority logic
+- **DID NOT run `./scripts/build-all.sh` to rebuild WASM**
+- Started server with old, broken WASM still deployed in `static/wasm/`
+- User saw completely broken UI with wrong status icons and logic
+- Wasted user time and caused major frustration
+
+**Root Cause - PROCESS VIOLATION**:
+- **FORGOT** that WASM changes require explicit rebuild
+- **SKIPPED** the build-all step before starting server
+- **ASSUMED** code changes would "just work" without rebuilding
+- **FAILED** to verify what was actually deployed vs what was edited
+
+**Why This Keeps Happening**:
+1. **Rust Incremental Build Confusion**: Regular `cargo build` auto-rebuilds backend, but WASM requires `wasm-pack build`
+2. **Hidden Deployment**: WASM artifacts in `static/wasm/` are "out of sight, out of mind"
+3. **No Verification Step**: Start server without checking build timestamps
+4. **Muscle Memory Failure**: Forgetting the 2-step process (build WASM → start server)
+
+**THE FIX - MANDATORY PROCESS**:
+
+**NEVER** start the server without first running:
+```bash
+./scripts/build-all.sh
+```
+
+**ALWAYS** follow this exact sequence:
+```bash
+# 1. Make code changes
+vim wasm-ui/src/lib.rs
+
+# 2. BUILD FIRST (NON-NEGOTIABLE!)
+./scripts/build-all.sh
+
+# 3. ONLY THEN start server
+./scripts/serve.sh
+```
+
+**Prevention Strategies**:
+
+1. **Update serve.sh to Check Build Freshness**:
+   - Script should check if WASM is older than source files
+   - Refuse to start if WASM is stale
+   - Force explicit rebuild
+
+2. **Add Build Verification**:
+   ```bash
+   # In serve.sh, before starting server:
+   if [ wasm-ui/src/lib.rs -nt static/wasm/wasm_ui_bg.wasm ]; then
+       echo "ERROR: WASM is out of date. Run ./scripts/build-all.sh first!"
+       exit 1
+   fi
+   ```
+
+3. **Single Command Workflow**:
+   - Create `./scripts/dev.sh` that builds AND serves
+   - Eliminates the 2-step process
+   - Can't forget to build
+
+4. **Visual Reminder in Terminal**:
+   - Add to shell prompt or script output:
+   - "🔨 Remember: Changes to wasm-ui/ require ./scripts/build-all.sh!"
+
+5. **Test Build Timestamp API**:
+   - Add `/api/wasm-build-time` endpoint
+   - UI shows warning if WASM is >5 minutes old
+   - Visual indicator of stale builds
+
+**What Should Have Happened**:
+1. Edit `wasm-ui/src/lib.rs`
+2. **RUN `./scripts/build-all.sh`** ← CRITICAL MISSING STEP
+3. Verify build completed successfully
+4. Start server
+5. Test changes in browser
+
+**Why This is UNACCEPTABLE**:
+- Wastes user's time debugging issues that don't exist in code
+- Destroys trust ("did you even test this?")
+- Shows lack of process discipline
+- Same mistake repeated multiple times = not learning
+
+**Commitment**:
+- **From now on**: ALWAYS check "is WASM built?" before starting server
+- **Verify**: `ls -la static/wasm/wasm_ui_bg.wasm` timestamp is recent
+- **When in doubt**: Run `./scripts/build-all.sh` again
+- **Update scripts**: Add build freshness checks to prevent this
+
+### 2025-11-17: Status Priority Logic Regression - DOCUMENTATION LIE
+
+**What Happened**:
+- Commit `b7a167d` message claimed: "Replace emoji icons with PNG files and fix priority logic"
+- **BUT**: The commit did NOT actually fix the priority logic!
+- Code still had broken logic: conflated all states into "critical" priority
+- Did NOT check GitHub branch ahead/behind status
+- Did NOT separate local-changes (yellow) from needs-sync (red)
+- User saw repos with 3 different states all showing wrong status
+
+**Root Cause Analysis**:
+
+1. **Commit Message Lied**: Said "fix priority logic" but code showed otherwise
+2. **Incomplete Fix**: Only fixed PNG icons, forgot to fix the logic
+3. **No Test Coverage**: If tests existed, they would have caught the broken logic
+4. **No Verification**: Didn't actually test the "fixed" logic before committing
+5. **Working Directory Confusion**: Had uncommitted changes mixed with broken committed code
+
+**The Broken Logic**:
+```rust
+// WRONG - What was actually committed
+fn calculate_repo_status_priority(...) -> u8 {
+    if let Some(status) = local_status {
+        if status.uncommitted_files > 0
+            || status.unpushed_commits > 0
+            || status.behind_commits > 0
+        {
+            return 0; // ALL states = priority 0!
+        }
+    }
+    if repo.unmerged_count > 0 {
+        return 1;
+    }
+    2
+}
+```
+
+**What Was DOCUMENTED in CLAUDE.md**:
+- Priority 0: local-changes (uncommitted files) - YELLOW
+- Priority 1: needs-sync (unpushed/behind OR branches ahead/behind) - RED
+- Priority 2: stale (unmerged branches) - WHITE
+- Priority 3: complete - GREEN
+- **MUST check BOTH local status AND GitHub branch status**
+
+**The Correct Logic** (now fixed):
+```rust
+fn calculate_repo_status_priority(...) -> u8 {
+    // Check uncommitted files FIRST (yellow)
+    if let Some(status) = local_status {
+        if status.uncommitted_files > 0 {
+            return 0; // local-changes
+        }
+    }
+
+    // Check sync issues (red)
+    if let Some(status) = local_status {
+        if status.unpushed_commits > 0 || status.behind_commits > 0 {
+            return 1; // needs-sync
+        }
+    }
+
+    // CRITICAL: Also check GitHub branch status!
+    for branch in &repo.branches {
+        if branch.ahead > 0 || branch.behind > 0 {
+            return 1; // needs-sync
+        }
+    }
+
+    // Check stale branches (white)
+    if repo.unmerged_count > 0 {
+        return 2; // stale
+    }
+
+    3 // complete (green)
+}
+```
+
+**Prevention Strategies**:
+
+1. **Write Tests for Status Priority**:
+   ```rust
+   #[test]
+   fn test_status_priority_uncommitted_beats_unpushed() {
+       let repo = test_repo();
+       let status = LocalRepoStatus {
+           uncommitted_files: 5,
+           unpushed_commits: 3,
+           behind_commits: 0,
+       };
+       assert_eq!(calculate_repo_status_priority(&repo, Some(&status)), 0);
+   }
+
+   #[test]
+   fn test_status_priority_checks_github_branches() {
+       let mut repo = test_repo();
+       repo.branches.push(BranchInfo {
+           ahead: 0,
+           behind: 34, // Behind on GitHub!
+           // ... other fields
+       });
+       let status = LocalRepoStatus {
+           uncommitted_files: 0,
+           unpushed_commits: 0,
+           behind_commits: 0, // Local is clean
+       };
+       // Should be needs-sync (priority 1) because of GitHub branch
+       assert_eq!(calculate_repo_status_priority(&repo, Some(&status)), 1);
+   }
+   ```
+
+2. **Verify Commit Messages**:
+   - If message says "fix X", verify X is actually fixed
+   - Before commit: diff the changes and confirm they match message
+   - Don't copy-paste commit messages - write them based on actual changes
+
+3. **Test All Edge Cases**:
+   - Repo with clean local but branches behind on GitHub
+   - Repo with uncommitted AND unpushed (should show uncommitted)
+   - Repo with only stale branches (no local/sync issues)
+   - Tab with mix of all statuses (should show worst-case)
+
+4. **Compare Implementation to Documentation**:
+   - Read CLAUDE.md requirements BEFORE implementing
+   - After implementing: re-read and verify compliance
+   - If docs say "MUST check both sources", code must check both sources
+
+**Why This Regression is CRITICAL**:
+- Documented behavior != actual behavior
+- User can't trust documentation
+- Core feature (status prioritization) completely broken
+- Shows lack of verification before claiming "fixed"
+- Same issue user reported before - regression of a fix!
+
+**Commitment**:
+- Never claim something is "fixed" in commit message without testing it
+- Write tests for status priority logic (all edge cases)
+- Verify implementation matches documentation before committing
+- When fixing a bug user reported, test THE EXACT scenario they reported
+
 ### 2025-11-16: Skipped TDD and Checkpoint Process
 
 **What Happened**:

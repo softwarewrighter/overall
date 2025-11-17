@@ -398,11 +398,17 @@ fn app() -> Html {
                         });
 
                         let has_needs_sync = !has_local_changes && group.repos.iter().any(|repo| {
-                            if let Some(status) = local_repo_statuses.get(&repo.id) {
+                            // Check local status first
+                            let local_needs_sync = if let Some(status) = local_repo_statuses.get(&repo.id) {
                                 status.unpushed_commits > 0 || status.behind_commits > 0
                             } else {
                                 false
-                            }
+                            };
+
+                            // Also check GitHub branch status (ahead/behind on remote)
+                            let github_needs_sync = repo.branches.iter().any(|b| b.ahead > 0 || b.behind > 0);
+
+                            local_needs_sync || github_needs_sync
                         });
 
                         let has_stale = !has_needs_sync && !has_local_changes && group.repos.iter().any(|repo| {
@@ -650,6 +656,26 @@ fn repo_row(props: &RepoRowProps) -> Html {
                             <span class="status-indicator needs-sync" title={format!("{} unpushed commits", status.unpushed_commits)}>
                                 <img class="status-icon" src="/icons/needs-sync.png" alt="Needs sync" />
                                 <span class="count">{ status.unpushed_commits }</span>
+                            </span>
+                        }
+                    } else {
+                        html! {}
+                    }
+                } else {
+                    html! {}
+                }}
+                // Check GitHub branch status (ahead/behind on remote) - only if no local status shown
+                { if props.local_status.as_ref().map_or(true, |s| s.uncommitted_files == 0 && s.unpushed_commits == 0 && s.behind_commits == 0) {
+                    // Check if any branch is ahead or behind on GitHub
+                    let branches_needing_sync = repo.branches.iter()
+                        .filter(|b| b.ahead > 0 || b.behind > 0)
+                        .count();
+
+                    if branches_needing_sync > 0 {
+                        html! {
+                            <span class="status-indicator needs-sync" title={format!("{} branches need sync", branches_needing_sync)}>
+                                <img class="status-icon" src="/icons/needs-sync.png" alt="Needs sync" />
+                                <span class="count">{ branches_needing_sync }</span>
                             </span>
                         }
                     } else {
@@ -1711,17 +1737,40 @@ fn get_mock_groups() -> Vec<RepoGroup> {
 
 #[cfg(target_arch = "wasm32")]
 fn calculate_repo_status_priority(repo: &Repository, local_status: Option<&LocalRepoStatus>) -> u8 {
-    // Priority: 0 = critical (highest), 1 = warning, 2 = clean (lowest)
+    // Priority: 0 = local-changes (YELLOW - most urgent, must commit before push)
+    //           1 = needs-sync (RED - unpushed/unfetched commits or ahead/behind branches)
+    //           2 = stale (WHITE - old unmerged branches)
+    //           3 = complete (GREEN - all clean)
+
+    // CRITICAL: Check local uncommitted files FIRST
+    // Rationale: Must commit before you can push!
     if let Some(status) = local_status {
-        if status.uncommitted_files > 0 || status.unpushed_commits > 0 || status.behind_commits > 0
-        {
-            return 0; // Critical
+        if status.uncommitted_files > 0 {
+            return 0; // local-changes (yellow)
         }
     }
-    if repo.unmerged_count > 0 {
-        return 1; // Warning
+
+    // Check for sync issues (unpushed/behind locally OR branches ahead/behind on GitHub)
+    if let Some(status) = local_status {
+        if status.unpushed_commits > 0 || status.behind_commits > 0 {
+            return 1; // needs-sync (red)
+        }
     }
-    2 // Clean
+
+    // CRITICAL: MUST also check GitHub branch status for ahead/behind
+    // A repo can have clean working directory but still have branches that need sync!
+    for branch in &repo.branches {
+        if branch.ahead > 0 || branch.behind > 0 {
+            return 1; // needs-sync (red)
+        }
+    }
+
+    // Check for stale unmerged branches
+    if repo.unmerged_count > 0 {
+        return 2; // stale (white)
+    }
+
+    3 // complete (green)
 }
 
 #[cfg(target_arch = "wasm32")]
