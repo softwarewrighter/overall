@@ -149,6 +149,68 @@ This is a Cargo workspace with two main packages:
 3. **Serve**: Axum server serves static files + REST API for dynamic operations
 4. **WASM UI**: Fetches `repos.json` → renders in Yew components → can call API endpoints
 
+### UI Design: Status Icon System
+
+**CRITICAL**: The UI uses PNG icons from `static/icons/` for status visualization. DO NOT regress to text/emoji icons.
+
+#### Icon Files (static/icons/)
+- `complete.png` - ✓ Green checkmark (all clean, no pending work)
+- `local-changes.png` - 📝 White document (uncommitted files)
+- `needs-sync.png` - 🔴 Red circle (unpushed commits or behind remote)
+- `stale.png` - ⚠️ Gray warning (old branches/PRs, no recent activity)
+
+#### Status Priority (Worst-Case Wins)
+
+**CRITICAL**: When a repo has MULTIPLE statuses, show the most urgent action needed.
+
+**Workflow priority** (check in this order):
+1. **local-changes** (Priority 0 - YELLOW/WARNING): uncommitted_files > 0 ← **CHECK FIRST** (commit before push!)
+2. **needs-sync** (Priority 1 - RED/CRITICAL): unpushed_commits > 0 OR behind_commits > 0
+3. **stale** (Priority 2 - WHITE/INFO): unmerged_count > 0 (old feature branches)
+4. **complete** (Priority 3 - GREEN/SUCCESS): No pending work
+
+**Rationale**: Uncommitted files must be committed before pushing, so local-changes takes priority over needs-sync.
+
+**Example 1**: Repo has 15 uncommitted files AND 1 unpushed commit → Show **local-changes** (yellow)
+**Example 2**: Tab has repos with local-changes, stale, and complete → Tab shows **local-changes** (yellow)
+
+#### Tab Icon Display Rules
+
+**Tab icons show the worst-case status** across ALL repos in that tab:
+- If ANY repo has needs-sync (priority 0) → tab shows needs-sync icon
+- Else if ANY repo has local-changes (priority 1) → tab shows local-changes icon
+- Else if ANY repo has stale (priority 2) → tab shows stale icon
+- Else (all complete) → tab shows complete icon
+
+**Tab hover text shows ONLY the worst-case reason**:
+- needs-sync: "Has uncommitted, unpushed, or unfetched commits"
+- local-changes: "Has local uncommitted changes"
+- stale: "Has unmerged feature branches"
+- complete: "All repositories up to date"
+
+DO NOT show multiple reasons in hover text - only the single worst-case reason.
+
+#### Row Icon Display Rules
+
+Row icons show the specific status of that individual repository:
+- Check local status first (needs-sync > local-changes)
+- Then check GitHub status (stale if unmerged_count > 0)
+- Show complete only if clean on both local and GitHub
+
+#### Implementation Location
+
+- Tab status calculation: `wasm-ui/src/lib.rs` in App component (tabs rendering section)
+- Row status calculation: `wasm-ui/src/lib.rs` in RepoRow component
+- Icon rendering: Use `<img>` tags with src="/icons/{status}.png"
+- Example: `<img class="tab-status-icon" src="/icons/needs-sync.png" alt="Needs sync" />`
+
+#### Common Bugs to Avoid
+
+1. ❌ Using emoji/text instead of PNG icons
+2. ❌ Showing multiple reasons in tab hover text (only show worst-case)
+3. ❌ Not calculating worst-case priority correctly
+4. ❌ Forgetting to exclude main/master/develop from unmerged_count
+
 ### External Dependencies
 
 - **gh CLI**: Must be installed and authenticated (`gh auth login`)
@@ -214,6 +276,18 @@ tracing_subscriber::fmt::init();
 ## Development Process (CRITICAL - READ FIRST)
 
 **ALWAYS follow these processes**. See `docs/ai_agent_instructions.md` and `docs/learnings.md` for details.
+
+### Always Use Scripts - NEVER Bare Commands
+
+**Use scripts for ALL operations**:
+- ✅ `./scripts/build-all.sh` - Build everything
+- ✅ `./scripts/serve.sh [port] [--debug]` - Start server
+- ✅ `./scripts/check-setup.sh` - Verify prerequisites
+- ❌ NEVER run `cargo build`, `./target/release/overall`, or any direct commands
+
+**Why**: Reproducibility, documentation, consistency, automation
+
+**If a script doesn't support what you need**: Update the script, don't bypass it
 
 ### Test-Driven Development (TDD) - NON-NEGOTIABLE
 

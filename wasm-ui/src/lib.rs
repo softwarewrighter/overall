@@ -387,25 +387,37 @@ fn app() -> Html {
                             })
                         };
 
-                        // Calculate group status based on repos - reflect worst case
-                        let has_critical = group.repos.iter().any(|repo| {
+                        // Calculate worst-case status priority across all repos in tab
+                        // Priority: 0=local-changes (commit before push!), 1=needs-sync (unpushed/behind), 2=stale, 3=complete
+                        let has_local_changes = group.repos.iter().any(|repo| {
                             if let Some(status) = local_repo_statuses.get(&repo.id) {
-                                status.unpushed_commits > 0 || status.behind_commits > 0 || status.uncommitted_files > 0
+                                status.uncommitted_files > 0
                             } else {
                                 false
                             }
                         });
 
-                        let has_warning = !has_critical && group.repos.iter().any(|repo| {
+                        let has_needs_sync = !has_local_changes && group.repos.iter().any(|repo| {
+                            if let Some(status) = local_repo_statuses.get(&repo.id) {
+                                status.unpushed_commits > 0 || status.behind_commits > 0
+                            } else {
+                                false
+                            }
+                        });
+
+                        let has_stale = !has_needs_sync && !has_local_changes && group.repos.iter().any(|repo| {
                             repo.unmerged_count > 0
                         });
 
-                        let (status_icon, tab_class) = if has_critical {
-                            (html! { <span class="tab-status-icon" title="Has uncommitted, unpushed, or unfetched commits">{ "🛑" }</span> }, "tab-critical")
-                        } else if has_warning {
-                            (html! { <span class="tab-status-icon" title="Has unmerged feature branches">{ "▲" }</span> }, "tab-warning")
+                        // Use PNG icons from static/icons/ - show only worst-case status with single reason
+                        let (status_icon, tab_class) = if has_local_changes {
+                            (html! { <img class="tab-status-icon" src="/icons/local-changes.png" alt="Local changes" title="Has local uncommitted changes" /> }, "tab-local-changes")
+                        } else if has_needs_sync {
+                            (html! { <img class="tab-status-icon" src="/icons/needs-sync.png" alt="Needs sync" title="Has uncommitted, unpushed, or unfetched commits" /> }, "tab-needs-sync")
+                        } else if has_stale {
+                            (html! { <img class="tab-status-icon" src="/icons/stale.png" alt="Stale" title="Has unmerged feature branches" /> }, "tab-stale")
                         } else if !group.repos.is_empty() {
-                            (html! { <span class="tab-status-icon" title="All repos clean">{ "✓" }</span> }, "tab-clean")
+                            (html! { <img class="tab-status-icon" src="/icons/complete.png" alt="Complete" title="All repositories up to date" /> }, "tab-complete")
                         } else {
                             (html! {}, "")
                         };
@@ -624,25 +636,20 @@ fn repo_row(props: &RepoRowProps) -> Html {
             </div>
             <div class="col-status repo-status">
                 { if let Some(status) = &props.local_status {
+                    // Priority: local-changes (yellow) FIRST - commit before push!
+                    // Then: needs-sync (red) for unpushed/behind
                     if status.uncommitted_files > 0 {
                         html! {
-                            <span class="status-indicator local-uncommitted" title={format!("{} uncommitted files", status.uncommitted_files)}>
-                                <span class="icon">{ "📝" }</span>
+                            <span class="status-indicator local-changes" title={format!("{} uncommitted files", status.uncommitted_files)}>
+                                <img class="status-icon" src="/icons/local-changes.png" alt="Local changes" />
                                 <span class="count">{ status.uncommitted_files }</span>
                             </span>
                         }
-                    } else if status.unpushed_commits > 0 {
+                    } else if status.unpushed_commits > 0 || status.behind_commits > 0 {
                         html! {
-                            <span class="status-indicator local-unpushed" title={format!("{} unpushed commits", status.unpushed_commits)}>
-                                <span class="icon">{ "⬆️" }</span>
+                            <span class="status-indicator needs-sync" title={format!("{} unpushed commits", status.unpushed_commits)}>
+                                <img class="status-icon" src="/icons/needs-sync.png" alt="Needs sync" />
                                 <span class="count">{ status.unpushed_commits }</span>
-                            </span>
-                        }
-                    } else if status.behind_commits > 0 {
-                        html! {
-                            <span class="status-indicator local-behind" title={format!("{} commits behind", status.behind_commits)}>
-                                <span class="icon">{ "⬇️" }</span>
-                                <span class="count">{ status.behind_commits }</span>
                             </span>
                         }
                     } else {
@@ -653,8 +660,8 @@ fn repo_row(props: &RepoRowProps) -> Html {
                 }}
                 { if repo.unmerged_count > 0 {
                     html! {
-                        <span class="status-indicator warning" title="Unmerged branches">
-                            <span class="icon">{ "◆" }</span>
+                        <span class="status-indicator stale" title="Unmerged branches">
+                            <img class="status-icon" src="/icons/stale.png" alt="Stale" />
                             <span class="count">{ repo.unmerged_count }</span>
                         </span>
                     }
@@ -664,7 +671,7 @@ fn repo_row(props: &RepoRowProps) -> Html {
                 { if repo.pr_count > 0 {
                     html! {
                         <span class="status-indicator info" title="Pending pull requests">
-                            <span class="icon">{ "📋" }</span>
+                            <img class="status-icon" src="/icons/stale.png" alt="Pull requests" />
                             <span class="count">{ repo.pr_count }</span>
                         </span>
                     }
@@ -674,7 +681,7 @@ fn repo_row(props: &RepoRowProps) -> Html {
                 { if repo.unmerged_count == 0 && repo.pr_count == 0 && props.local_status.as_ref().map_or(true, |s| !s.is_dirty) {
                     html! {
                         <span class="status-indicator success" title="No pending work">
-                            <span class="icon">{ "✓" }</span>
+                            <img class="status-icon" src="/icons/complete.png" alt="Complete" />
                         </span>
                     }
                 } else {
