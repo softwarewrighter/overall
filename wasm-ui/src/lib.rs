@@ -119,7 +119,8 @@ fn app() -> Html {
     let show_add_dialog = use_state(|| false);
     let show_settings = use_state(|| false);
     let dragged_repo_id = use_state(|| None::<String>);
-    let local_repo_statuses = use_state(|| std::collections::HashMap::<String, LocalRepoStatus>::new());
+    let local_repo_statuses =
+        use_state(|| std::collections::HashMap::<String, LocalRepoStatus>::new());
     let sort_state = use_state(|| SortState {
         column: SortColumn::Status,
         ascending: false,
@@ -166,26 +167,38 @@ fn app() -> Html {
                 web_sys::console::log_1(&"[App] Fetching local repo statuses...".into());
                 match fetch_local_repo_statuses().await {
                     Ok(statuses) => {
-                        web_sys::console::log_1(&format!("[App] Loaded {} local repo statuses", statuses.len()).into());
+                        web_sys::console::log_1(
+                            &format!("[App] Loaded {} local repo statuses", statuses.len()).into(),
+                        );
 
                         // Debug log sw-install specifically
-                        if let Some(sw_install_status) = statuses.iter().find(|s| s.repo_id.contains("sw-install")) {
-                            web_sys::console::log_1(&format!(
-                                "[App] sw-install status: uncommitted={}, is_dirty={}",
-                                sw_install_status.uncommitted_files, sw_install_status.is_dirty
-                            ).into());
+                        if let Some(sw_install_status) =
+                            statuses.iter().find(|s| s.repo_id.contains("sw-install"))
+                        {
+                            web_sys::console::log_1(
+                                &format!(
+                                    "[App] sw-install status: uncommitted={}, is_dirty={}",
+                                    sw_install_status.uncommitted_files, sw_install_status.is_dirty
+                                )
+                                .into(),
+                            );
                         } else {
-                            web_sys::console::log_1(&"[App] sw-install NOT found in fetched statuses!".into());
+                            web_sys::console::log_1(
+                                &"[App] sw-install NOT found in fetched statuses!".into(),
+                            );
                         }
 
-                        let status_map: std::collections::HashMap<String, LocalRepoStatus> = statuses
-                            .into_iter()
-                            .map(|s| (s.repo_id.clone(), s))
-                            .collect();
+                        let status_map: std::collections::HashMap<String, LocalRepoStatus> =
+                            statuses
+                                .into_iter()
+                                .map(|s| (s.repo_id.clone(), s))
+                                .collect();
 
                         // Debug the HashMap key for sw-install
                         if status_map.contains_key("softwarewrighter/sw-install") {
-                            web_sys::console::log_1(&"[App] HashMap contains 'softwarewrighter/sw-install' key".into());
+                            web_sys::console::log_1(
+                                &"[App] HashMap contains 'softwarewrighter/sw-install' key".into(),
+                            );
                         } else {
                             web_sys::console::log_1(&"[App] HashMap does NOT contain 'softwarewrighter/sw-install' key!".into());
                         }
@@ -193,7 +206,9 @@ fn app() -> Html {
                         local_repo_statuses.set(status_map);
                     }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("[App] ERROR fetching local repo statuses: {}", e).into());
+                        web_sys::console::error_1(
+                            &format!("[App] ERROR fetching local repo statuses: {}", e).into(),
+                        );
                     }
                 }
             });
@@ -525,7 +540,11 @@ fn repo_list_header(props: &RepoListHeaderProps) -> Html {
 
     let sort_indicator = |column: SortColumn| -> &'static str {
         if props.sort_state.column == column {
-            if props.sort_state.ascending { " ▲" } else { " ▼" }
+            if props.sort_state.ascending {
+                " ▲"
+            } else {
+                " ▼"
+            }
         } else {
             ""
         }
@@ -566,10 +585,13 @@ fn repo_row(props: &RepoRowProps) -> Html {
     // Debug logging for sw-install
     if repo.id.contains("sw-install") {
         if let Some(ref status) = props.local_status {
-            web_sys::console::log_1(&format!(
-                "[RepoRow] sw-install status: uncommitted={}, unpushed={}, is_dirty={}",
-                status.uncommitted_files, status.unpushed_commits, status.is_dirty
-            ).into());
+            web_sys::console::log_1(
+                &format!(
+                    "[RepoRow] sw-install status: uncommitted={}, unpushed={}, is_dirty={}",
+                    status.uncommitted_files, status.unpushed_commits, status.is_dirty
+                )
+                .into(),
+            );
         } else {
             web_sys::console::log_1(&"[RepoRow] sw-install has NO local_status!".into());
         }
@@ -677,7 +699,9 @@ fn repo_detail_modal(props: &RepoDetailModalProps) -> Html {
     let repo = &props.repo;
 
     // Find current group for this repo
-    let current_group_id = props.groups.iter()
+    let current_group_id = props
+        .groups
+        .iter()
         .find(|g| g.repos.iter().any(|r| r.id == repo.id))
         .and_then(|g| g.id);
 
@@ -712,10 +736,16 @@ fn repo_detail_modal(props: &RepoDetailModalProps) -> Html {
         })
     };
 
+    // Exclude main/master/develop branches - they should never have PRs created
     let ready_for_pr = repo
         .branches
         .iter()
-        .filter(|b| b.status == "ReadyForPR")
+        .filter(|b| {
+            b.status == "ReadyForPR"
+                && b.name != "main"
+                && b.name != "master"
+                && b.name != "develop"
+        })
         .count();
     let in_review = repo
         .branches
@@ -1094,7 +1124,8 @@ fn add_repo_dialog(props: &AddRepoDialogProps) -> Html {
                     .map(|g| g.id)
             } else {
                 None
-            }.flatten();
+            }
+            .flatten();
 
             let repo_ids: Vec<String> = (*selected_repos).iter().cloned().collect();
             let on_close = on_close.clone();
@@ -1293,11 +1324,15 @@ fn settings_dialog(props: &SettingsDialogProps) -> Html {
                 web_sys::console::log_1(&"[SettingsDialog] Fetching local repo roots...".into());
                 match fetch_local_repo_roots().await {
                     Ok(roots) => {
-                        web_sys::console::log_1(&format!("[SettingsDialog] Fetched {} roots", roots.len()).into());
+                        web_sys::console::log_1(
+                            &format!("[SettingsDialog] Fetched {} roots", roots.len()).into(),
+                        );
                         local_repo_roots.set(roots);
                     }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("[SettingsDialog] Error fetching roots: {}", e).into());
+                        web_sys::console::error_1(
+                            &format!("[SettingsDialog] Error fetching roots: {}", e).into(),
+                        );
                     }
                 }
             });
@@ -1332,7 +1367,9 @@ fn settings_dialog(props: &SettingsDialogProps) -> Html {
         let local_repo_roots = local_repo_roots.clone();
         Callback::from(move |_| {
             let path = (*new_path).clone();
-            web_sys::console::log_1(&format!("[SettingsDialog] Add path clicked: '{}'", path).into());
+            web_sys::console::log_1(
+                &format!("[SettingsDialog] Add path clicked: '{}'", path).into(),
+            );
             if path.trim().is_empty() {
                 web_sys::console::log_1(&"[SettingsDialog] Path is empty, ignoring".into());
                 return;
@@ -1345,14 +1382,21 @@ fn settings_dialog(props: &SettingsDialogProps) -> Html {
                     Ok(()) => {
                         web_sys::console::log_1(&"[SettingsDialog] Path added successfully".into());
                         new_path.set(String::new());
-                        web_sys::console::log_1(&"[SettingsDialog] Refreshing roots list...".into());
+                        web_sys::console::log_1(
+                            &"[SettingsDialog] Refreshing roots list...".into(),
+                        );
                         if let Ok(roots) = fetch_local_repo_roots().await {
-                            web_sys::console::log_1(&format!("[SettingsDialog] Updated list has {} roots", roots.len()).into());
+                            web_sys::console::log_1(
+                                &format!("[SettingsDialog] Updated list has {} roots", roots.len())
+                                    .into(),
+                            );
                             local_repo_roots.set(roots);
                         }
                     }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("[SettingsDialog] Error adding path: {}", e).into());
+                        web_sys::console::error_1(
+                            &format!("[SettingsDialog] Error adding path: {}", e).into(),
+                        );
                         // Show error to user
                         if let Some(window) = web_sys::window() {
                             let _ = window.alert_with_message(&format!("Error: {}", e));
@@ -1367,8 +1411,7 @@ fn settings_dialog(props: &SettingsDialogProps) -> Html {
         Callback::from(move |_| {
             wasm_bindgen_futures::spawn_local(async move {
                 let _ = scan_local_repos().await;
-                web_sys::window()
-                    .and_then(|w| w.location().reload().ok());
+                web_sys::window().and_then(|w| w.location().reload().ok());
             });
         })
     };
@@ -1625,38 +1668,36 @@ fn get_mock_groups() -> Vec<RepoGroup> {
         RepoGroup {
             id: Some(3),
             name: "Experiments".to_string(),
-            repos: vec![
-                Repository {
-                    id: "softwarewrighter/test-repo".to_string(),
-                    owner: "softwarewrighter".to_string(),
-                    name: "test-repo".to_string(),
-                    language: "Python".to_string(),
-                    last_push: "3 weeks ago".to_string(),
-                    unmerged_count: 1,
-                    pr_count: 0,
-                    pull_requests: vec![],
-                    branches: vec![
-                        BranchInfo {
-                            name: "main".to_string(),
-                            sha: "abcdef123456".to_string(),
-                            status: "InReview".to_string(),
-                            ahead: 0,
-                            behind: 0,
-                            last_commit_date: "3 weeks ago".to_string(),
-                            commits: vec![],
-                        },
-                        BranchInfo {
-                            name: "experimental".to_string(),
-                            sha: "fedcba654321".to_string(),
-                            status: "ReadyForPR".to_string(),
-                            ahead: 3,
-                            behind: 0,
-                            last_commit_date: "4 weeks ago".to_string(),
-                            commits: vec![],
-                        },
-                    ],
-                },
-            ],
+            repos: vec![Repository {
+                id: "softwarewrighter/test-repo".to_string(),
+                owner: "softwarewrighter".to_string(),
+                name: "test-repo".to_string(),
+                language: "Python".to_string(),
+                last_push: "3 weeks ago".to_string(),
+                unmerged_count: 1,
+                pr_count: 0,
+                pull_requests: vec![],
+                branches: vec![
+                    BranchInfo {
+                        name: "main".to_string(),
+                        sha: "abcdef123456".to_string(),
+                        status: "InReview".to_string(),
+                        ahead: 0,
+                        behind: 0,
+                        last_commit_date: "3 weeks ago".to_string(),
+                        commits: vec![],
+                    },
+                    BranchInfo {
+                        name: "experimental".to_string(),
+                        sha: "fedcba654321".to_string(),
+                        status: "ReadyForPR".to_string(),
+                        ahead: 3,
+                        behind: 0,
+                        last_commit_date: "4 weeks ago".to_string(),
+                        commits: vec![],
+                    },
+                ],
+            }],
         },
     ]
 }
@@ -1665,7 +1706,8 @@ fn get_mock_groups() -> Vec<RepoGroup> {
 fn calculate_repo_status_priority(repo: &Repository, local_status: Option<&LocalRepoStatus>) -> u8 {
     // Priority: 0 = critical (highest), 1 = warning, 2 = clean (lowest)
     if let Some(status) = local_status {
-        if status.uncommitted_files > 0 || status.unpushed_commits > 0 || status.behind_commits > 0 {
+        if status.uncommitted_files > 0 || status.unpushed_commits > 0 || status.behind_commits > 0
+        {
             return 0; // Critical
         }
     }
@@ -1782,7 +1824,8 @@ async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
 
     // Convert grouped repositories
     for group in data.groups {
-        let repos: Vec<Repository> = group.repos
+        let repos: Vec<Repository> = group
+            .repos
             .into_iter()
             .map(|r| Repository {
                 id: r.id,
@@ -1838,7 +1881,8 @@ async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
 
     // Add ungrouped repositories as a separate tab if any exist
     if !data.ungrouped.is_empty() {
-        let ungrouped_repos: Vec<Repository> = data.ungrouped
+        let ungrouped_repos: Vec<Repository> = data
+            .ungrouped
             .into_iter()
             .map(|r| Repository {
                 id: r.id,

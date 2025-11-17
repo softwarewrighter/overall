@@ -282,9 +282,16 @@ fn main() {
                     let branches = db.get_branches_for_repo(&repo.id).unwrap_or_default();
                     let prs = db.get_pull_requests_for_repo(&repo.id).unwrap_or_default();
 
+                    // Exclude main/master/develop branches - they should never have PRs created
                     let unmerged_count = branches
                         .iter()
-                        .filter(|b| b.ahead_by > 0 && b.behind_by == 0)
+                        .filter(|b| {
+                            b.ahead_by > 0
+                                && b.behind_by == 0
+                                && b.name != "main"
+                                && b.name != "master"
+                                && b.name != "develop"
+                        })
                         .count();
                     let open_pr_count = prs
                         .iter()

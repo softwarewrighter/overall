@@ -125,7 +125,7 @@ pub async fn serve(
         .route("/api/repos/move", post(move_repo))
         .route("/api/repos/export", post(export_repos))
         .route("/api/repos/sync-all", post(sync_all_repos))
-        .route("/api/repos/:id/sync", post(sync_single_repo))
+        .route("/api/repos/sync", post(sync_single_repo))
         .route("/api/pr/create", post(create_pr))
         .route("/api/pr/create-all", post(create_all_prs))
         // Local repos routes
@@ -1056,30 +1056,88 @@ async fn sync_all_repos(
     .into_response()
 }
 
-async fn sync_single_repo(State(state): State<AppState>, Path(repo_id): Path<String>) -> Response {
-    // Sync branches
-    if let Err(e) = crate::github::fetch_branches(&repo_id) {
+#[derive(Deserialize)]
+struct SyncRepoRequest {
+    repo_id: String,
+}
+
+async fn sync_single_repo(
+    State(state): State<AppState>,
+    Json(req): Json<SyncRepoRequest>,
+) -> Response {
+    let repo_id = &req.repo_id;
+    let db = state.db.lock().unwrap();
+
+    // Fetch branches from GitHub
+    let branches = match crate::github::fetch_branches(repo_id) {
+        Ok(b) => b,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: format!("Failed to fetch branches for {}: {}", repo_id, e),
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    // Clear old branches BEFORE saving new ones
+    if let Err(e) = db.clear_branches_for_repo(repo_id) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse {
                 success: false,
-                message: format!("Failed to sync branches for {}: {}", repo_id, e),
+                message: format!("Failed to clear old branches for {}: {}", repo_id, e),
             }),
         )
             .into_response();
     }
 
-    // Sync PRs
-    if let Err(e) = crate::github::fetch_pull_requests(&repo_id) {
+    // Save new branches
+    for branch in &branches {
+        if let Err(e) = db.save_branch(branch) {
+            eprintln!("Warning: Failed to save branch {}: {}", branch.name, e);
+        }
+    }
+
+    // Fetch PRs from GitHub
+    let prs = match crate::github::fetch_pull_requests(repo_id) {
+        Ok(p) => p,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: format!("Failed to fetch PRs for {}: {}", repo_id, e),
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    // Clear old PRs BEFORE saving new ones
+    if let Err(e) = db.clear_pull_requests_for_repo(repo_id) {
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse {
                 success: false,
-                message: format!("Failed to sync PRs for {}: {}", repo_id, e),
+                message: format!("Failed to clear old PRs for {}: {}", repo_id, e),
             }),
         )
             .into_response();
     }
+
+    // Save new PRs
+    for pr in &prs {
+        if let Err(e) = db.save_pull_request(pr) {
+            eprintln!("Warning: Failed to save PR #{}: {}", pr.number, e);
+        }
+    }
+
+    // Release lock before regenerating JSON
+    drop(db);
 
     // Regenerate repos.json
     if let Err(e) = regenerate_repos_json(&state) {
@@ -1268,5 +1326,65 @@ mod tests {
 
         let stored_timestamp: chrono::DateTime<Utc> = stored_time.unwrap().parse().unwrap();
         assert!(stored_timestamp >= before_sync);
+    }
+
+    #[test]
+    fn test_clear_removes_all_old_data() {
+        use crate::models::{Branch, BranchStatus, PRState, PullRequest};
+
+        let (_temp_dir, _path, db) = setup_test_db();
+
+        // Create test repository
+        let repo = create_test_repo("test/repo", "test", "repo");
+        db.save_repository(&repo).unwrap();
+
+        // Add 3 branches
+        for i in 1..=3 {
+            let branch = Branch {
+                id: i,
+                repo_id: repo.id.clone(),
+                name: format!("branch-{}", i),
+                sha: format!("sha{}", i),
+                ahead_by: 1,
+                behind_by: 0,
+                status: BranchStatus::ReadyForPR,
+                last_commit_date: Utc::now(),
+            };
+            db.save_branch(&branch).unwrap();
+        }
+
+        // Verify 3 branches exist
+        let branches = db.get_branches_for_repo(&repo.id).unwrap();
+        assert_eq!(branches.len(), 3);
+
+        // Clear branches
+        db.clear_branches_for_repo(&repo.id).unwrap();
+
+        // Verify all branches are gone
+        let branches = db.get_branches_for_repo(&repo.id).unwrap();
+        assert_eq!(branches.len(), 0, "Stale branches were not cleared!");
+
+        // Same test for PRs
+        for i in 1..=2 {
+            let pr = PullRequest {
+                id: i,
+                repo_id: repo.id.clone(),
+                branch_id: None,
+                number: i as u32,
+                state: PRState::Open,
+                title: format!("PR {}", i),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
+            db.save_pull_request(&pr).unwrap();
+        }
+
+        let prs = db.get_pull_requests_for_repo(&repo.id).unwrap();
+        assert_eq!(prs.len(), 2);
+
+        db.clear_pull_requests_for_repo(&repo.id).unwrap();
+
+        let prs = db.get_pull_requests_for_repo(&repo.id).unwrap();
+        assert_eq!(prs.len(), 0, "Stale PRs were not cleared!");
     }
 }

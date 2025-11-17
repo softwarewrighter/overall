@@ -232,6 +232,51 @@ async fn fetch() -> Result<T, String> {
 
 ## Process Improvements
 
+### ✅ Always Use Scripts - NEVER Bare Commands
+
+**CRITICAL**: Use scripts for ALL operations to ensure repeatability and reproducibility.
+
+**NEVER**:
+```bash
+# ❌ WRONG - Bare command
+./target/release/overall serve --port 8459 --debug
+
+# ❌ WRONG - Direct cargo invocation
+cargo build --release -p overall-cli
+
+# ❌ WRONG - Manual process
+cd wasm-ui && wasm-pack build
+```
+
+**ALWAYS**:
+```bash
+# ✅ CORRECT - Use scripts
+./scripts/serve.sh --debug
+./scripts/build-all.sh
+./scripts/check-setup.sh
+```
+
+**Why This Matters**:
+- **Reproducibility**: Scripts ensure same process every time
+- **Documentation**: Scripts serve as executable documentation
+- **Consistency**: All developers use same commands
+- **Maintenance**: Update one script, everyone benefits
+- **Debugging**: Scripts can include logging, error handling
+- **Automation**: Scripts work in CI/CD pipelines
+
+**Script Development Guidelines**:
+1. If you find yourself typing the same command twice, create a script
+2. Scripts should have clear usage comments at the top
+3. Scripts should support common flags (--debug, --help, etc.)
+4. Scripts should validate prerequisites before running
+5. Scripts should provide clear error messages
+6. Never bypass scripts by running commands directly
+
+**If a script doesn't support what you need**:
+- Update the script to add the feature
+- Don't bypass it with bare commands
+- Document the new option in the script's usage comments
+
 ### ✅ Test-Driven Development (TDD) - NON-NEGOTIABLE
 
 **CRITICAL**: Always follow TDD. Never write implementation code before tests.
@@ -414,6 +459,107 @@ git push
 12. **Type Safety**: Let the compiler catch errors early (no JsValue leaks)
 
 ## Critical Failures to Remember
+
+### 2025-11-17: Stale Data Retention Bug (Sync Not Clearing Old Data)
+
+**What Happened**:
+- Implemented `sync_single_repo()` API endpoint to refresh repository data
+- Endpoint fetched new branches/PRs from GitHub
+- **BUT**: Did not clear old data from database before saving new data
+- Result: Deleted branches still showed in UI after "refresh"
+- User deleted 2 branches on GitHub, refreshed UI, still saw all 3 branches
+
+**Root Cause**:
+- Copied pattern from `fetch_branches()` which only fetches, doesn't save
+- Did not reference `main.rs` scan command which does it correctly
+- scan command: fetch → **clear old** → save new
+- sync endpoint: fetch → save new (WRONG - leaves stale data)
+
+**How It Should Work**:
+```rust
+// CORRECT Pattern (from main.rs scan command)
+let branches = github::fetch_branches(&repo_id)?;
+db.clear_branches_for_repo(&repo_id)?;  // ← CRITICAL
+for branch in &branches {
+    db.save_branch(branch)?;
+}
+```
+
+**What We Did Wrong**:
+```rust
+// WRONG - Missing clear step
+let branches = github::fetch_branches(repo_id)?;
+// Missing: db.clear_branches_for_repo(repo_id)?;
+// Just saves new data, leaving old data in place
+```
+
+**Prevention Strategies**:
+
+1. **Write Tests for Data Lifecycle**:
+   - Test: Add 3 items → clear → verify 0 items
+   - Test: Add old data → sync with 1 item → verify exactly 1 item (not 4)
+   - Pattern: `test_clear_removes_all_old_data()`
+
+2. **Always Reference Working Code**:
+   - When implementing similar functionality (sync vs scan)
+   - Read the working implementation FIRST
+   - Copy the entire pattern, not just pieces
+   - Document why each step exists
+
+3. **Test with Real Deletion Scenarios**:
+   - Don't just test additions
+   - Test deletions (delete branch on GitHub, sync, verify gone)
+   - Test updates (change branch SHA, sync, verify updated)
+   - Test edge cases (delete all branches, sync, verify empty)
+
+4. **Database Operations Always Follow This Pattern**:
+   ```rust
+   // 1. Fetch new data from source
+   let data = source.fetch()?;
+
+   // 2. Clear old data (prevents stale data retention)
+   db.clear_old_data()?;
+
+   // 3. Save new data
+   for item in data {
+       db.save(item)?;
+   }
+   ```
+
+5. **Document Critical Steps**:
+   ```rust
+   // Clear old branches BEFORE saving new ones
+   // This ensures deleted branches are removed from the database
+   db.clear_branches_for_repo(repo_id)?;
+   ```
+
+**Test That Would Have Caught This**:
+```rust
+#[test]
+fn test_sync_removes_deleted_branches() {
+    // Setup: Save 3 branches to DB
+    for i in 1..=3 {
+        db.save_branch(&branch_i)?;
+    }
+
+    // Simulate GitHub now has only 1 branch (2 were deleted)
+    let github_branches = vec![branch_1];
+
+    // Sync
+    sync_single_repo(repo_id)?;
+
+    // CRITICAL: Should have exactly 1, not 3
+    let db_branches = db.get_branches(repo_id)?;
+    assert_eq!(db_branches.len(), 1, "Deleted branches not removed!");
+}
+```
+
+**Why This Matters**:
+- Shows stale/deleted data to users (confusing)
+- Users make decisions based on incorrect data
+- "Refresh" feature that doesn't actually refresh is worse than no feature
+- Erodes trust in the entire application
+- Can cause cascading errors (trying to create PRs for deleted branches)
 
 ### 2025-11-16: Skipped TDD and Checkpoint Process
 
