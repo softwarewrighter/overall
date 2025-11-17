@@ -102,7 +102,7 @@ impl Database {
             "SELECT id, repo_id, name, sha, ahead_by, behind_by, status, last_commit_date
              FROM branches
              WHERE repo_id = ?1
-             ORDER BY name"
+             ORDER BY name",
         )?;
 
         let branches = stmt
@@ -148,7 +148,7 @@ impl Database {
             "SELECT id, repo_id, branch_id, number, state, title, created_at, updated_at
              FROM pull_requests
              WHERE repo_id = ?1
-             ORDER BY number DESC"
+             ORDER BY number DESC",
         )?;
 
         let prs = stmt
@@ -175,10 +175,8 @@ impl Database {
     }
 
     pub fn clear_branches_for_repo(&self, repo_id: &str) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM branches WHERE repo_id = ?1",
-            params![repo_id],
-        )?;
+        self.conn
+            .execute("DELETE FROM branches WHERE repo_id = ?1", params![repo_id])?;
         Ok(())
     }
 
@@ -260,7 +258,7 @@ impl Database {
 
     pub fn get_all_groups(&self) -> Result<Vec<Group>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, display_order, created_at FROM groups ORDER BY display_order"
+            "SELECT id, name, display_order, created_at FROM groups ORDER BY display_order",
         )?;
 
         let groups = stmt
@@ -365,10 +363,8 @@ impl Database {
     }
 
     pub fn delete_group(&self, group_id: i64) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM groups WHERE id = ?1",
-            params![group_id],
-        )?;
+        self.conn
+            .execute("DELETE FROM groups WHERE id = ?1", params![group_id])?;
         Ok(())
     }
 
@@ -419,7 +415,7 @@ impl Database {
         let mut stmt = self.conn.prepare(
             "SELECT id, path, enabled, created_at
              FROM local_repo_roots
-             ORDER BY created_at DESC"
+             ORDER BY created_at DESC",
         )?;
 
         let roots = stmt
@@ -439,10 +435,8 @@ impl Database {
     }
 
     pub fn remove_local_repo_root(&self, id: i64) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM local_repo_roots WHERE id = ?1",
-            params![id],
-        )?;
+        self.conn
+            .execute("DELETE FROM local_repo_roots WHERE id = ?1", params![id])?;
         Ok(())
     }
 
@@ -474,7 +468,10 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_local_repo_status(&self, repo_id: &str) -> Result<Option<crate::models::LocalRepoStatus>> {
+    pub fn get_local_repo_status(
+        &self,
+        repo_id: &str,
+    ) -> Result<Option<crate::models::LocalRepoStatus>> {
         use crate::models::LocalRepoStatus;
 
         let mut stmt = self.conn.prepare(
@@ -533,6 +530,61 @@ impl Database {
 
         Ok(statuses)
     }
+
+    pub fn get_config(&self, key: &str) -> Result<Option<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM config WHERE key = ?1")?;
+        let mut rows = stmt.query([key])?;
+
+        if let Some(row) = rows.next()? {
+            Ok(Some(row.get(0)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn set_config(&self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO config (key, value) VALUES (?1, ?2)",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_repositories_updated_since(&self, since: &str) -> Result<Vec<Repository>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, owner, name, language, description, pushed_at, created_at, updated_at, is_fork, priority
+             FROM repositories
+             WHERE pushed_at > ?1
+             ORDER BY priority DESC, pushed_at DESC"
+        )?;
+
+        let repos = stmt
+            .query_map([since], |row| {
+                Ok(Repository {
+                    id: row.get(0)?,
+                    owner: row.get(1)?,
+                    name: row.get(2)?,
+                    language: row.get(3)?,
+                    description: row.get(4)?,
+                    pushed_at: row.get::<_, String>(5)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    created_at: row.get::<_, String>(6)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    updated_at: row.get::<_, String>(7)?.parse().map_err(|_| {
+                        rusqlite::Error::InvalidParameterName("Invalid date".to_string())
+                    })?,
+                    is_fork: row.get::<_, i32>(8)? != 0,
+                    priority: row.get(9)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(repos)
+    }
 }
 
 #[cfg(test)]
@@ -574,5 +626,83 @@ mod tests {
         assert_eq!(repos.len(), 1);
         assert_eq!(repos[0].id, "test/repo");
         assert_eq!(repos[0].owner, "test");
+    }
+
+    #[test]
+    fn test_config_get_set() {
+        let temp = tempdir().unwrap();
+        let db_path = temp.path().join("test.db");
+        let db = Database::open_or_create(&db_path).unwrap();
+
+        // Test setting and getting a config value
+        db.set_config("test_key", "test_value").unwrap();
+        let value = db.get_config("test_key").unwrap();
+        assert_eq!(value, Some("test_value".to_string()));
+
+        // Test updating an existing config value
+        db.set_config("test_key", "new_value").unwrap();
+        let value = db.get_config("test_key").unwrap();
+        assert_eq!(value, Some("new_value".to_string()));
+
+        // Test getting a non-existent key
+        let value = db.get_config("non_existent").unwrap();
+        assert_eq!(value, None);
+    }
+
+    #[test]
+    fn test_get_repositories_updated_since() {
+        let temp = tempdir().unwrap();
+        let db_path = temp.path().join("test.db");
+        let db = Database::open_or_create(&db_path).unwrap();
+
+        let now = Utc::now();
+        let old_time = now - chrono::Duration::days(5);
+        let recent_time = now - chrono::Duration::hours(1);
+
+        // Create an old repository
+        let old_repo = Repository {
+            id: "test/old-repo".to_string(),
+            owner: "test".to_string(),
+            name: "old-repo".to_string(),
+            language: Some("Rust".to_string()),
+            description: Some("Old repo".to_string()),
+            pushed_at: old_time,
+            created_at: old_time,
+            updated_at: old_time,
+            is_fork: false,
+            priority: 0.5,
+        };
+
+        // Create a recent repository
+        let recent_repo = Repository {
+            id: "test/recent-repo".to_string(),
+            owner: "test".to_string(),
+            name: "recent-repo".to_string(),
+            language: Some("Rust".to_string()),
+            description: Some("Recent repo".to_string()),
+            pushed_at: recent_time,
+            created_at: recent_time,
+            updated_at: recent_time,
+            is_fork: false,
+            priority: 0.5,
+        };
+
+        db.save_repository(&old_repo).unwrap();
+        db.save_repository(&recent_repo).unwrap();
+
+        // Get repositories updated since 2 days ago
+        let cutoff = (now - chrono::Duration::days(2)).to_rfc3339();
+        let repos = db.get_repositories_updated_since(&cutoff).unwrap();
+
+        // Should only return the recent repository
+        assert_eq!(repos.len(), 1);
+        assert_eq!(repos[0].id, "test/recent-repo");
+
+        // Get repositories updated since 10 days ago
+        let cutoff = (now - chrono::Duration::days(10)).to_rfc3339();
+        let repos = db.get_repositories_updated_since(&cutoff).unwrap();
+
+        // Should return both repositories
+        assert_eq!(repos.len(), 2);
     }
 }

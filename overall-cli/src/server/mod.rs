@@ -10,7 +10,11 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, path::PathBuf, sync::{Arc, Mutex}};
+use std::{
+    net::SocketAddr,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 use tower_http::{
     cors::{Any, CorsLayer},
     services::ServeDir,
@@ -101,7 +105,12 @@ struct ScanLocalReposRequest {
     // Empty - scans all enabled roots
 }
 
-pub async fn serve(port: u16, db_path: PathBuf, static_dir: PathBuf, _debug: bool) -> anyhow::Result<()> {
+pub async fn serve(
+    port: u16,
+    db_path: PathBuf,
+    static_dir: PathBuf,
+    _debug: bool,
+) -> anyhow::Result<()> {
     let db = Database::open_or_create(&db_path)?;
     let state = AppState {
         db: Arc::new(Mutex::new(db)),
@@ -115,12 +124,17 @@ pub async fn serve(port: u16, db_path: PathBuf, static_dir: PathBuf, _debug: boo
         .route("/api/groups/delete/:id", post(delete_group))
         .route("/api/repos/move", post(move_repo))
         .route("/api/repos/export", post(export_repos))
+        .route("/api/repos/sync-all", post(sync_all_repos))
+        .route("/api/repos/:id/sync", post(sync_single_repo))
         .route("/api/pr/create", post(create_pr))
         .route("/api/pr/create-all", post(create_all_prs))
         // Local repos routes
         .route("/api/local-repos/roots", get(list_local_repo_roots))
         .route("/api/local-repos/roots", post(add_local_repo_root))
-        .route("/api/local-repos/roots/:id", axum::routing::delete(remove_local_repo_root))
+        .route(
+            "/api/local-repos/roots/:id",
+            axum::routing::delete(remove_local_repo_root),
+        )
         .route("/api/local-repos/scan", post(scan_local_repos))
         .route("/api/local-repos/status", get(get_local_repos_status))
         // Static files
@@ -249,43 +263,46 @@ fn regenerate_repos_json(state: &AppState) -> Result<(), Box<dyn std::error::Err
             .filter(|pr| matches!(pr.state, crate::models::PRState::Open))
             .count();
 
-        export_data["ungrouped"].as_array_mut().unwrap().push(json!({
-            "id": repo.id,
-            "owner": repo.owner,
-            "name": repo.name,
-            "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
-            "lastPush": repo.pushed_at.to_rfc3339(),
-            "branches": branches.iter().map(|b| {
-                let commits = db.get_commits_for_branch(b.id).unwrap_or_default();
-                json!({
-                    "name": b.name,
-                    "sha": b.sha,
-                    "aheadBy": b.ahead_by,
-                    "behindBy": b.behind_by,
-                    "status": b.status.to_string(),
-                    "lastCommitDate": b.last_commit_date.to_rfc3339(),
-                    "commits": commits.iter().map(|c| json!({
-                        "sha": c.sha,
-                        "message": c.message,
-                        "authorName": c.author_name,
-                        "authorEmail": c.author_email,
-                        "authoredDate": c.authored_date.to_rfc3339(),
-                        "committerName": c.committer_name,
-                        "committerEmail": c.committer_email,
-                        "committedDate": c.committed_date.to_rfc3339(),
-                    })).collect::<Vec<_>>(),
-                })
-            }).collect::<Vec<_>>(),
-            "pullRequests": prs.iter().map(|pr| json!({
-                "number": pr.number,
-                "title": pr.title,
-                "state": pr.state.to_string(),
-                "createdAt": pr.created_at.to_rfc3339(),
-                "updatedAt": pr.updated_at.to_rfc3339(),
-            })).collect::<Vec<_>>(),
-            "unmergedCount": unmerged_count,
-            "prCount": open_pr_count,
-        }));
+        export_data["ungrouped"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({
+                "id": repo.id,
+                "owner": repo.owner,
+                "name": repo.name,
+                "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
+                "lastPush": repo.pushed_at.to_rfc3339(),
+                "branches": branches.iter().map(|b| {
+                    let commits = db.get_commits_for_branch(b.id).unwrap_or_default();
+                    json!({
+                        "name": b.name,
+                        "sha": b.sha,
+                        "aheadBy": b.ahead_by,
+                        "behindBy": b.behind_by,
+                        "status": b.status.to_string(),
+                        "lastCommitDate": b.last_commit_date.to_rfc3339(),
+                        "commits": commits.iter().map(|c| json!({
+                            "sha": c.sha,
+                            "message": c.message,
+                            "authorName": c.author_name,
+                            "authorEmail": c.author_email,
+                            "authoredDate": c.authored_date.to_rfc3339(),
+                            "committerName": c.committer_name,
+                            "committerEmail": c.committer_email,
+                            "committedDate": c.committed_date.to_rfc3339(),
+                        })).collect::<Vec<_>>(),
+                    })
+                }).collect::<Vec<_>>(),
+                "pullRequests": prs.iter().map(|pr| json!({
+                    "number": pr.number,
+                    "title": pr.title,
+                    "state": pr.state.to_string(),
+                    "createdAt": pr.created_at.to_rfc3339(),
+                    "updatedAt": pr.updated_at.to_rfc3339(),
+                })).collect::<Vec<_>>(),
+                "unmergedCount": unmerged_count,
+                "prCount": open_pr_count,
+            }));
     }
 
     // Write to static/repos.json
@@ -296,10 +313,7 @@ fn regenerate_repos_json(state: &AppState) -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
-async fn move_repo(
-    State(state): State<AppState>,
-    Json(req): Json<MoveRepoRequest>,
-) -> Response {
+async fn move_repo(State(state): State<AppState>, Json(req): Json<MoveRepoRequest>) -> Response {
     let result = {
         let db = state.db.lock().unwrap();
         if let Some(target_group_id) = req.target_group_id {
@@ -350,7 +364,8 @@ async fn add_repos_to_group(
     } else {
         // Create new group
         let db = state.db.lock().unwrap();
-        let max_order = db.get_all_groups()
+        let max_order = db
+            .get_all_groups()
             .unwrap_or_default()
             .iter()
             .map(|g| g.display_order)
@@ -411,10 +426,7 @@ async fn add_repos_to_group(
     .into_response()
 }
 
-async fn delete_group(
-    State(state): State<AppState>,
-    Path(group_id): Path<i64>,
-) -> Response {
+async fn delete_group(State(state): State<AppState>, Path(group_id): Path<i64>) -> Response {
     // Delete the group - repos will automatically become ungrouped due to CASCADE
     {
         let db = state.db.lock().unwrap();
@@ -481,9 +493,7 @@ async fn export_repos(State(state): State<AppState>) -> Response {
 
         for repo in repos {
             let branches = db.get_branches_for_repo(&repo.id).unwrap_or_default();
-            let prs = db
-                .get_pull_requests_for_repo(&repo.id)
-                .unwrap_or_default();
+            let prs = db.get_pull_requests_for_repo(&repo.id).unwrap_or_default();
 
             let unmerged_count = branches
                 .iter()
@@ -544,9 +554,7 @@ async fn export_repos(State(state): State<AppState>) -> Response {
     let ungrouped = db.get_ungrouped_repositories().unwrap_or_default();
     for repo in ungrouped {
         let branches = db.get_branches_for_repo(&repo.id).unwrap_or_default();
-        let prs = db
-            .get_pull_requests_for_repo(&repo.id)
-            .unwrap_or_default();
+        let prs = db.get_pull_requests_for_repo(&repo.id).unwrap_or_default();
 
         let unmerged_count = branches
             .iter()
@@ -557,43 +565,46 @@ async fn export_repos(State(state): State<AppState>) -> Response {
             .filter(|pr| matches!(pr.state, crate::models::PRState::Open))
             .count();
 
-        export_data["ungrouped"].as_array_mut().unwrap().push(json!({
-            "id": repo.id,
-            "owner": repo.owner,
-            "name": repo.name,
-            "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
-            "lastPush": repo.pushed_at.to_rfc3339(),
-            "branches": branches.iter().map(|b| {
-                let commits = db.get_commits_for_branch(b.id).unwrap_or_default();
-                json!({
-                    "name": b.name,
-                    "sha": b.sha,
-                    "aheadBy": b.ahead_by,
-                    "behindBy": b.behind_by,
-                    "status": b.status.to_string(),
-                    "lastCommitDate": b.last_commit_date.to_rfc3339(),
-                    "commits": commits.iter().map(|c| json!({
-                        "sha": c.sha,
-                        "message": c.message,
-                        "authorName": c.author_name,
-                        "authorEmail": c.author_email,
-                        "authoredDate": c.authored_date.to_rfc3339(),
-                        "committerName": c.committer_name,
-                        "committerEmail": c.committer_email,
-                        "committedDate": c.committed_date.to_rfc3339(),
-                    })).collect::<Vec<_>>(),
-                })
-            }).collect::<Vec<_>>(),
-            "pullRequests": prs.iter().map(|pr| json!({
-                "number": pr.number,
-                "title": pr.title,
-                "state": pr.state.to_string(),
-                "createdAt": pr.created_at.to_rfc3339(),
-                "updatedAt": pr.updated_at.to_rfc3339(),
-            })).collect::<Vec<_>>(),
-            "unmergedCount": unmerged_count,
-            "prCount": open_pr_count,
-        }));
+        export_data["ungrouped"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({
+                "id": repo.id,
+                "owner": repo.owner,
+                "name": repo.name,
+                "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
+                "lastPush": repo.pushed_at.to_rfc3339(),
+                "branches": branches.iter().map(|b| {
+                    let commits = db.get_commits_for_branch(b.id).unwrap_or_default();
+                    json!({
+                        "name": b.name,
+                        "sha": b.sha,
+                        "aheadBy": b.ahead_by,
+                        "behindBy": b.behind_by,
+                        "status": b.status.to_string(),
+                        "lastCommitDate": b.last_commit_date.to_rfc3339(),
+                        "commits": commits.iter().map(|c| json!({
+                            "sha": c.sha,
+                            "message": c.message,
+                            "authorName": c.author_name,
+                            "authorEmail": c.author_email,
+                            "authoredDate": c.authored_date.to_rfc3339(),
+                            "committerName": c.committer_name,
+                            "committerEmail": c.committer_email,
+                            "committedDate": c.committed_date.to_rfc3339(),
+                        })).collect::<Vec<_>>(),
+                    })
+                }).collect::<Vec<_>>(),
+                "pullRequests": prs.iter().map(|pr| json!({
+                    "number": pr.number,
+                    "title": pr.title,
+                    "state": pr.state.to_string(),
+                    "createdAt": pr.created_at.to_rfc3339(),
+                    "updatedAt": pr.updated_at.to_rfc3339(),
+                })).collect::<Vec<_>>(),
+                "unmergedCount": unmerged_count,
+                "prCount": open_pr_count,
+            }));
     }
 
     // Write to static/repos.json
@@ -617,21 +628,30 @@ async fn export_repos(State(state): State<AppState>) -> Response {
     .into_response()
 }
 
-async fn create_pr(
-    State(_state): State<AppState>,
-    Json(req): Json<CreatePRRequest>,
-) -> Response {
+async fn create_pr(State(state): State<AppState>, Json(req): Json<CreatePRRequest>) -> Response {
     // Call github::create_pull_request
     let title_ref = req.title.as_deref();
     let body_ref = req.body.as_deref();
 
     match crate::github::create_pull_request(&req.repo_id, &req.branch_name, title_ref, body_ref) {
-        Ok(pr_url) => Json(CreatePRResponse {
-            success: true,
-            pr_url: Some(pr_url),
-            message: "Pull request created successfully".to_string(),
-        })
-        .into_response(),
+        Ok(pr_url) => {
+            // Sync PRs from GitHub to update the database
+            if let Err(e) = crate::github::fetch_pull_requests(&req.repo_id) {
+                eprintln!("Warning: Failed to sync PRs after creation: {}", e);
+            } else {
+                // Update the repos.json file
+                if let Err(e) = regenerate_repos_json(&state) {
+                    eprintln!("Warning: Failed to regenerate repos.json: {}", e);
+                }
+            }
+
+            Json(CreatePRResponse {
+                success: true,
+                pr_url: Some(pr_url),
+                message: "Pull request created successfully".to_string(),
+            })
+            .into_response()
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(CreatePRResponse {
@@ -670,10 +690,7 @@ async fn create_all_prs(
     drop(db);
 
     // Filter branches with unmerged work (ahead > 0)
-    let branches_to_pr: Vec<_> = branches
-        .into_iter()
-        .filter(|b| b.ahead_by > 0)
-        .collect();
+    let branches_to_pr: Vec<_> = branches.into_iter().filter(|b| b.ahead_by > 0).collect();
 
     if branches_to_pr.is_empty() {
         return Json(CreateAllPRsResponse {
@@ -710,10 +727,25 @@ async fn create_all_prs(
     let success_count = results.iter().filter(|r| r.success).count();
     let total_count = results.len();
 
+    // Sync PRs from GitHub to update the database
+    if success_count > 0 {
+        if let Err(e) = crate::github::fetch_pull_requests(&req.repo_id) {
+            eprintln!("Warning: Failed to sync PRs after batch creation: {}", e);
+        } else {
+            // Update the repos.json file
+            if let Err(e) = regenerate_repos_json(&state) {
+                eprintln!("Warning: Failed to regenerate repos.json: {}", e);
+            }
+        }
+    }
+
     Json(CreateAllPRsResponse {
         success: true,
         results,
-        message: format!("Created {} of {} PRs successfully", success_count, total_count),
+        message: format!(
+            "Created {} of {} PRs successfully",
+            success_count, total_count
+        ),
     })
     .into_response()
 }
@@ -896,5 +928,345 @@ async fn get_local_repos_status(State(state): State<AppState>) -> Response {
             }),
         )
             .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SyncAllReposRequest {
+    // Empty - syncs all repos
+}
+
+async fn sync_all_repos(
+    State(state): State<AppState>,
+    Json(_req): Json<SyncAllReposRequest>,
+) -> Response {
+    use chrono::Utc;
+
+    // Get last refresh timestamp
+    let last_refresh = {
+        let db = state.db.lock().unwrap();
+        match db.get_config("last_refresh_time") {
+            Ok(Some(timestamp)) => Some(timestamp),
+            _ => None,
+        }
+    };
+
+    let repos = {
+        let db = state.db.lock().unwrap();
+        match &last_refresh {
+            Some(since) => {
+                // Only get repos updated since last refresh
+                match db.get_repositories_updated_since(since) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to get updated repos, falling back to all: {}",
+                            e
+                        );
+                        // Fallback to all repos if query fails
+                        match db.get_all_repositories() {
+                            Ok(r) => r,
+                            Err(e) => {
+                                return (
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    Json(ApiResponse {
+                                        success: false,
+                                        message: format!("Failed to get repositories: {}", e),
+                                    }),
+                                )
+                                    .into_response()
+                            }
+                        }
+                    }
+                }
+            }
+            None => {
+                // First refresh - get all repos
+                match db.get_all_repositories() {
+                    Ok(r) => r,
+                    Err(e) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ApiResponse {
+                                success: false,
+                                message: format!("Failed to get repositories: {}", e),
+                            }),
+                        )
+                            .into_response()
+                    }
+                }
+            }
+        }
+    };
+
+    let total_repos = repos.len();
+    let mut synced_count = 0;
+    let mut failed_repos = Vec::new();
+
+    // Sync branches and PRs for each repo
+    for repo in &repos {
+        // Sync branches
+        if let Err(e) = crate::github::fetch_branches(&repo.id) {
+            eprintln!("Warning: Failed to sync branches for {}: {}", repo.id, e);
+            failed_repos.push(format!("{} (branches)", repo.id));
+        } else {
+            // Sync PRs
+            if let Err(e) = crate::github::fetch_pull_requests(&repo.id) {
+                eprintln!("Warning: Failed to sync PRs for {}: {}", repo.id, e);
+                failed_repos.push(format!("{} (PRs)", repo.id));
+            } else {
+                synced_count += 1;
+            }
+        }
+    }
+
+    // Update last refresh timestamp
+    {
+        let db = state.db.lock().unwrap();
+        let now = Utc::now().to_rfc3339();
+        if let Err(e) = db.set_config("last_refresh_time", &now) {
+            eprintln!("Warning: Failed to update last_refresh_time: {}", e);
+        }
+    }
+
+    // Regenerate repos.json
+    if let Err(e) = regenerate_repos_json(&state) {
+        eprintln!("Warning: Failed to regenerate repos.json: {}", e);
+    }
+
+    let message = if failed_repos.is_empty() {
+        if total_repos == 0 {
+            "No repositories needed syncing (all up to date)".to_string()
+        } else {
+            format!("Successfully synced {} repositories", synced_count)
+        }
+    } else {
+        format!(
+            "Synced {}/{} repositories. Failed: {}",
+            synced_count,
+            total_repos,
+            failed_repos.join(", ")
+        )
+    };
+
+    Json(ApiResponse {
+        success: true,
+        message,
+    })
+    .into_response()
+}
+
+async fn sync_single_repo(State(state): State<AppState>, Path(repo_id): Path<String>) -> Response {
+    // Sync branches
+    if let Err(e) = crate::github::fetch_branches(&repo_id) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse {
+                success: false,
+                message: format!("Failed to sync branches for {}: {}", repo_id, e),
+            }),
+        )
+            .into_response();
+    }
+
+    // Sync PRs
+    if let Err(e) = crate::github::fetch_pull_requests(&repo_id) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse {
+                success: false,
+                message: format!("Failed to sync PRs for {}: {}", repo_id, e),
+            }),
+        )
+            .into_response();
+    }
+
+    // Regenerate repos.json
+    if let Err(e) = regenerate_repos_json(&state) {
+        eprintln!("Warning: Failed to regenerate repos.json: {}", e);
+    }
+
+    Json(ApiResponse {
+        success: true,
+        message: format!("Successfully synced repository {}", repo_id),
+    })
+    .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Repository;
+    use chrono::Utc;
+    use std::sync::{Arc, Mutex};
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> (tempfile::TempDir, PathBuf, Database) {
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let db = Database::open_or_create(&db_path).unwrap();
+        (temp_dir, db_path, db)
+    }
+
+    fn create_test_repo(id: &str, owner: &str, name: &str) -> Repository {
+        Repository {
+            id: id.to_string(),
+            owner: owner.to_string(),
+            name: name.to_string(),
+            language: Some("Rust".to_string()),
+            description: Some("Test repo".to_string()),
+            pushed_at: Utc::now(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            is_fork: false,
+            priority: 0.5,
+        }
+    }
+
+    #[test]
+    fn test_regenerate_repos_json() {
+        let temp_dir = tempdir().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let static_dir = temp_dir.path().join("static");
+        std::fs::create_dir_all(&static_dir).unwrap();
+
+        let db = Database::open_or_create(&db_path).unwrap();
+
+        // Add a test repository
+        let repo = create_test_repo("test/repo", "test", "repo");
+        db.save_repository(&repo).unwrap();
+
+        let state = AppState {
+            db: Arc::new(Mutex::new(db)),
+            static_dir: static_dir.clone(),
+        };
+
+        // Test regeneration
+        let result = regenerate_repos_json(&state);
+        assert!(result.is_ok(), "Should successfully regenerate repos.json");
+
+        // Verify file was created
+        let json_path = static_dir.join("repos.json");
+        assert!(json_path.exists(), "repos.json should be created");
+
+        // Verify JSON content
+        let content = std::fs::read_to_string(&json_path).unwrap();
+        assert!(content.contains("\"groups\""), "Should have groups array");
+        assert!(
+            content.contains("\"ungrouped\""),
+            "Should have ungrouped array"
+        );
+    }
+
+    #[test]
+    fn test_config_get_set() {
+        let (_temp_dir, _path, db) = setup_test_db();
+
+        // Test setting and getting config
+        db.set_config("test_key", "test_value").unwrap();
+        let value = db.get_config("test_key").unwrap();
+        assert_eq!(value, Some("test_value".to_string()));
+
+        // Test updating config
+        db.set_config("test_key", "new_value").unwrap();
+        let value = db.get_config("test_key").unwrap();
+        assert_eq!(value, Some("new_value".to_string()));
+
+        // Test non-existent key
+        let value = db.get_config("nonexistent").unwrap();
+        assert_eq!(value, None);
+    }
+
+    #[test]
+    fn test_get_repositories_updated_since_filters_correctly() {
+        let (_temp_dir, _path, db) = setup_test_db();
+
+        let now = Utc::now();
+        let old_time = now - chrono::Duration::days(5);
+        let recent_time = now - chrono::Duration::hours(1);
+
+        // Create old repository
+        let mut old_repo = create_test_repo("test/old", "test", "old");
+        old_repo.pushed_at = old_time;
+        db.save_repository(&old_repo).unwrap();
+
+        // Create recent repository
+        let mut recent_repo = create_test_repo("test/recent", "test", "recent");
+        recent_repo.pushed_at = recent_time;
+        db.save_repository(&recent_repo).unwrap();
+
+        // Get repos updated since 2 days ago
+        let cutoff = (now - chrono::Duration::days(2)).to_rfc3339();
+        let repos = db.get_repositories_updated_since(&cutoff).unwrap();
+
+        // Should only return recent repo
+        assert_eq!(repos.len(), 1);
+        assert_eq!(repos[0].id, "test/recent");
+    }
+
+    #[test]
+    fn test_sync_all_repos_first_run_no_last_refresh() {
+        let (_temp_dir, _path, db) = setup_test_db();
+
+        // Verify no last_refresh_time config exists
+        let last_refresh = db.get_config("last_refresh_time").unwrap();
+        assert_eq!(
+            last_refresh, None,
+            "Should have no last refresh time initially"
+        );
+
+        // Add test repository
+        let repo = create_test_repo("test/repo1", "test", "repo1");
+        db.save_repository(&repo).unwrap();
+
+        // On first run, should get all repositories
+        let all_repos = db.get_all_repositories().unwrap();
+        assert_eq!(all_repos.len(), 1);
+        assert_eq!(all_repos[0].id, "test/repo1");
+    }
+
+    #[test]
+    fn test_sync_all_repos_subsequent_run_filters_by_timestamp() {
+        let (_temp_dir, _path, db) = setup_test_db();
+
+        let now = Utc::now();
+        let old_time = now - chrono::Duration::days(5);
+
+        // Set last refresh time to 2 days ago
+        let last_refresh = (now - chrono::Duration::days(2)).to_rfc3339();
+        db.set_config("last_refresh_time", &last_refresh).unwrap();
+
+        // Add old repo (before last refresh)
+        let mut old_repo = create_test_repo("test/old", "test", "old");
+        old_repo.pushed_at = old_time;
+        db.save_repository(&old_repo).unwrap();
+
+        // Add recent repo (after last refresh)
+        let mut recent_repo = create_test_repo("test/recent", "test", "recent");
+        recent_repo.pushed_at = now - chrono::Duration::hours(1);
+        db.save_repository(&recent_repo).unwrap();
+
+        // Should only get repos updated since last refresh
+        let updated_repos = db.get_repositories_updated_since(&last_refresh).unwrap();
+        assert_eq!(updated_repos.len(), 1);
+        assert_eq!(updated_repos[0].id, "test/recent");
+    }
+
+    #[test]
+    fn test_sync_updates_last_refresh_timestamp() {
+        let (_temp_dir, _path, db) = setup_test_db();
+
+        let before_sync = Utc::now();
+
+        // Simulate sync by setting last_refresh_time
+        let timestamp = Utc::now().to_rfc3339();
+        db.set_config("last_refresh_time", &timestamp).unwrap();
+
+        // Verify it was set
+        let stored_time = db.get_config("last_refresh_time").unwrap();
+        assert!(stored_time.is_some());
+
+        let stored_timestamp: chrono::DateTime<Utc> = stored_time.unwrap().parse().unwrap();
+        assert!(stored_timestamp >= before_sync);
     }
 }
