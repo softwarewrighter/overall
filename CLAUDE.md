@@ -178,21 +178,32 @@ This is a Cargo workspace with two main packages:
   - `repo.branches[].ahead`, `repo.branches[].behind`
 - **MUST check BOTH sources** for needs-sync: A repo with clean local working directory may still have branches that are ahead/behind on GitHub!
 
-**Example 1**: Repo has 15 uncommitted files AND 1 unpushed commit → Show **local-changes** (yellow)
-**Example 2**: Tab has repos with local-changes, stale, and complete → Tab shows **local-changes** (yellow)
-**Example 3**: Repo has clean working directory (0 uncommitted, 0 unpushed) BUT has branch with behindBy: 34 on GitHub → Show **needs-sync** (red)
+**Example 1**: Repo has 15 uncommitted files AND 1 unpushed commit → Show **local-changes** (yellow, priority 0 beats priority 1)
+**Example 2**: Group has one repo with local-changes (yellow, priority 0) and one with needs-sync (red, priority 1) → Tab shows **local-changes** (yellow, minimum priority wins)
+**Example 3**: Group has one repo with needs-sync (red, priority 1) and one with stale (white, priority 2) → Tab shows **needs-sync** (red, minimum priority wins)
+**Example 4**: Repo has clean working directory (0 uncommitted, 0 unpushed) BUT has branch with behindBy: 34 on GitHub → Show **needs-sync** (red)
 
 #### Tab Icon Display Rules
 
+**CRITICAL**: Tab and row status use the SAME function (`calculate_repo_status_priority()`).
+
 **Tab icons show the worst-case status** across ALL repos in that tab:
-- If ANY repo has needs-sync (priority 0) → tab shows needs-sync icon
-- Else if ANY repo has local-changes (priority 1) → tab shows local-changes icon
-- Else if ANY repo has stale (priority 2) → tab shows stale icon
-- Else (all complete) → tab shows complete icon
+```rust
+let worst_priority = group.repos.iter()
+    .map(|repo| calculate_repo_status_priority(repo, local_statuses.get(&repo.id)))
+    .min()  // Minimum priority = worst status
+    .unwrap_or(3);
+```
+
+**Priority mapping:**
+- Priority 0 (local-changes, YELLOW) → tab shows local-changes icon
+- Priority 1 (needs-sync, RED) → tab shows needs-sync icon
+- Priority 2 (stale, WHITE) → tab shows stale icon
+- Priority 3 (complete, GREEN) → tab shows complete icon
 
 **Tab hover text shows ONLY the worst-case reason**:
-- needs-sync: "Has uncommitted, unpushed, or unfetched commits"
 - local-changes: "Has local uncommitted changes"
+- needs-sync: "Has uncommitted, unpushed, or unfetched commits"
 - stale: "Has unmerged feature branches"
 - complete: "All repositories up to date"
 
@@ -200,23 +211,35 @@ DO NOT show multiple reasons in hover text - only the single worst-case reason.
 
 #### Row Icon Display Rules
 
-Row icons show the specific status of that individual repository:
-- Check local status first (needs-sync > local-changes)
-- Then check GitHub status (stale if unmerged_count > 0)
-- Show complete only if clean on both local and GitHub
+**Rows use the EXACT SAME `calculate_repo_status_priority()` function as tabs.**
+
+Each row shows the status of that individual repository:
+- Priority 0 (yellow): Has uncommitted files
+- Priority 1 (red): Has unpushed/behind commits OR branches ahead/behind on GitHub
+- Priority 2 (white): Has unmerged feature branches
+- Priority 3 (green): All clean
 
 #### Implementation Location
 
-- Tab status calculation: `wasm-ui/src/lib.rs` in App component (tabs rendering section)
-- Row status calculation: `wasm-ui/src/lib.rs` in RepoRow component
-- Icon rendering: Use `<img>` tags with src="/icons/{status}.png"
-- Example: `<img class="tab-status-icon" src="/icons/needs-sync.png" alt="Needs sync" />`
+**CRITICAL**: Single source of truth for status calculation:
+- **Shared function**: `calculate_repo_status_priority()` in `wasm-ui/src/lib.rs` line ~1739
+- **Tab uses it**: Line ~393 - maps over repos and takes `.min()` priority
+- **Row uses it**: Called for each individual repo
+- **Icon rendering**: Use `<img>` tags with src="/icons/{status}.png"
+- **Example**: `<img class="tab-status-icon" src="/icons/needs-sync.png" alt="Needs sync" />`
+
+**Why shared function matters:**
+- DRY principle - don't duplicate logic
+- Prevents tab/row mismatch bugs
+- Single place to update when priority rules change
+- Testable in one place
 
 #### Common Bugs to Avoid
 
 1. ❌ Using emoji/text instead of PNG icons
 2. ❌ Showing multiple reasons in tab hover text (only show worst-case)
 3. ❌ Not calculating worst-case priority correctly
+4. ❌ **Duplicating status logic between tab and row** - MUST use shared function
 4. ❌ Forgetting to exclude main/master/develop from unmerged_count
 5. ❌ **Only checking LOCAL status** - MUST check both local_status AND repo.branches for needs-sync!
 
