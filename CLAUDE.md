@@ -165,14 +165,22 @@ This is a Cargo workspace with two main packages:
 
 **Workflow priority** (check in this order):
 1. **local-changes** (Priority 0 - YELLOW/WARNING): uncommitted_files > 0 ← **CHECK FIRST** (commit before push!)
-2. **needs-sync** (Priority 1 - RED/CRITICAL): unpushed_commits > 0 OR behind_commits > 0
+2. **needs-sync** (Priority 1 - RED/CRITICAL): unpushed_commits > 0 OR behind_commits > 0 **OR** repo.branches has any branch with ahead > 0 or behind > 0
 3. **stale** (Priority 2 - WHITE/INFO): unmerged_count > 0 (old feature branches)
 4. **complete** (Priority 3 - GREEN/SUCCESS): No pending work
 
 **Rationale**: Uncommitted files must be committed before pushing, so local-changes takes priority over needs-sync.
 
+**CRITICAL - Dual Status Checking**:
+- **LOCAL status**: From `/api/local-repos/status` endpoint (filesystem git working directory)
+  - `uncommitted_files`, `unpushed_commits`, `behind_commits`
+- **GITHUB status**: From `repos.json` (GitHub API branch data)
+  - `repo.branches[].ahead`, `repo.branches[].behind`
+- **MUST check BOTH sources** for needs-sync: A repo with clean local working directory may still have branches that are ahead/behind on GitHub!
+
 **Example 1**: Repo has 15 uncommitted files AND 1 unpushed commit → Show **local-changes** (yellow)
 **Example 2**: Tab has repos with local-changes, stale, and complete → Tab shows **local-changes** (yellow)
+**Example 3**: Repo has clean working directory (0 uncommitted, 0 unpushed) BUT has branch with behindBy: 34 on GitHub → Show **needs-sync** (red)
 
 #### Tab Icon Display Rules
 
@@ -210,6 +218,7 @@ Row icons show the specific status of that individual repository:
 2. ❌ Showing multiple reasons in tab hover text (only show worst-case)
 3. ❌ Not calculating worst-case priority correctly
 4. ❌ Forgetting to exclude main/master/develop from unmerged_count
+5. ❌ **Only checking LOCAL status** - MUST check both local_status AND repo.branches for needs-sync!
 
 ### External Dependencies
 
@@ -250,12 +259,137 @@ Uses `tracing` crate. Initialize in `main.rs`:
 tracing_subscriber::fmt::init();
 ```
 
-## Testing Notes
+## Testing Strategy (CRITICAL - READ FIRST)
 
-- Integration tests require `gh` CLI authenticated
-- Tests in `github/mod.rs` expect the `softwarewrighter` account to have repositories
-- Database tests use temporary files via `tempfile` crate
-- WASM UI has no tests currently (all logic is in single file)
+**See `docs/testing.md` for complete testing patterns and examples.**
+
+### Core Principles
+
+1. **Test EVERYTHING** - Every feature, edge case, error condition
+2. **Dependency Injection** - Use traits and mocks to test without external dependencies
+3. **TDD Always** - Write tests before implementation (Red → Green → Refactor)
+4. **No Integration Dependency** - Tests must NOT require `gh` CLI, Ollama, or network access
+
+### Test Infrastructure Requirements
+
+#### Mock/Spy Pattern for GitHub Operations
+
+ALL GitHub operations must go through a trait that can be mocked:
+
+```rust
+// overall-cli/src/github/trait.rs
+pub trait GitHubClient {
+    fn list_repos(&self, owner: &str) -> Result<Vec<Repository>>;
+    fn fetch_branches(&self, owner: &str, repo: &str) -> Result<Vec<Branch>>;
+    fn create_pull_request(&self, request: &PrRequest) -> Result<PullRequest>;
+    // ... etc
+}
+
+// Real implementation wraps gh CLI
+pub struct RealGitHubClient;
+
+// Test implementation returns canned data
+pub struct MockGitHubClient {
+    pub repos: Vec<Repository>,
+    pub branches: HashMap<String, Vec<Branch>>,
+    // ... etc
+}
+```
+
+#### Database Test Fixtures
+
+Use builder pattern for test data:
+
+```rust
+// overall-cli/src/test_support/fixtures.rs
+pub struct TestDatabase {
+    db: Database,
+    temp_file: TempPath,
+}
+
+impl TestDatabase {
+    pub fn new() -> Self { /* ... */ }
+
+    pub fn with_repo(&mut self, builder: RepoBuilder) -> &mut Self {
+        // Insert repo with specified state
+    }
+
+    pub fn with_group(&mut self, name: &str, repos: Vec<i64>) -> &mut Self {
+        // Create group and associate repos
+    }
+}
+
+pub struct RepoBuilder {
+    name: String,
+    owner: String,
+    has_unmerged: bool,
+    has_uncommitted: bool,
+    has_unpushed: bool,
+    // ... etc
+}
+```
+
+### Required Test Coverage
+
+Every feature must have tests for:
+
+1. **Happy path** - Normal successful operation
+2. **Edge cases** - Empty inputs, boundary conditions, unusual combinations
+3. **Error conditions** - Invalid inputs, missing data, constraint violations
+4. **State transitions** - How operations change system state
+5. **Combinations** - Multiple repos with different states in different groups
+
+### Example Test Scenarios
+
+```rust
+#[test]
+fn test_create_pr_skips_repos_with_open_prs() {
+    let mut db = TestDatabase::new()
+        .with_repo(RepoBuilder::new("repo1").with_open_pr())
+        .with_repo(RepoBuilder::new("repo2").ready_for_pr())
+        .build();
+
+    let mock_gh = MockGitHubClient::new()
+        .expect_no_call_for("repo1")
+        .expect_create_pr("repo2");
+
+    let result = create_all_prs(&db, &mock_gh)?;
+
+    assert_eq!(result.skipped, vec!["repo1"]);
+    assert_eq!(result.created, vec!["repo2"]);
+    mock_gh.verify();
+}
+```
+
+### Test Organization
+
+- **Unit tests**: In same file as implementation (`#[cfg(test)] mod tests`)
+- **Integration tests**: In `tests/` directory (for cross-module scenarios)
+- **Test support**: In `overall-cli/src/test_support/` (fixtures, builders, mocks)
+- **Mock implementations**: In `overall-cli/src/github/mock.rs` and similar
+
+### Running Tests
+
+```bash
+# Run all tests (MUST PASS before commit)
+cargo test --all
+
+# Run specific test
+cargo test test_create_pr_skips_repos_with_open_prs
+
+# Run with output
+cargo test -- --nocapture
+
+# Run tests in specific package
+cargo test -p overall-cli
+```
+
+### Legacy Test Notes (TO BE MIGRATED)
+
+- ❌ OLD: Integration tests require `gh` CLI authenticated
+- ❌ OLD: Tests in `github/mod.rs` expect the `softwarewrighter` account to have repositories
+- ✅ Database tests use temporary files via `tempfile` crate
+- ❌ WASM UI has no tests currently (all logic is in single file) - NEEDS TESTS
 
 ## Important Configuration
 
@@ -353,6 +487,7 @@ When building for release:
 ## Important References
 
 - **Development Process**: `docs/ai_agent_instructions.md` - Full process guidelines
+- **Testing Strategy**: `docs/testing.md` - Test patterns, mocks, fixtures, and examples
 - **Learnings**: `docs/learnings.md` - Historical mistakes and solutions
 - **Architecture**: `docs/architecture.md` - System design details
 - **Status**: `docs/status.md` - Current progress

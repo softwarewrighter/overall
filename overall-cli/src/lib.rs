@@ -16,4 +16,7 @@ pub mod models;
 pub mod server;
 pub mod storage;
 
+#[cfg(test)]
+pub mod test_support;
+
 pub use error::{Error, Result};

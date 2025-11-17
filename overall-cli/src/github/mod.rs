@@ -1,6 +1,12 @@
 //! GitHub API integration via gh CLI
 
+pub mod client_trait;
 pub mod commands;
+pub mod real_client;
+
+// Re-export the trait and real client for convenience
+pub use client_trait::GitHubClient;
+pub use real_client::RealGitHubClient;
 
 use crate::{
     models::{Branch, BranchStatus, Commit, PullRequest, Repository},
@@ -8,21 +14,33 @@ use crate::{
 };
 
 /// List repositories for a given owner (user or organization)
+///
+/// This is a convenience function that uses RealGitHubClient.
+/// For testable code, prefer injecting a GitHubClient trait object.
 pub fn list_repos(owner: &str, limit: usize) -> Result<Vec<Repository>> {
     commands::list_repos(owner, limit)
 }
 
 /// Fetch all branches for a repository
+///
+/// This is a convenience function that uses RealGitHubClient.
+/// For testable code, prefer injecting a GitHubClient trait object.
 pub fn fetch_branches(repo_id: &str) -> Result<Vec<Branch>> {
     commands::fetch_branches(repo_id)
 }
 
 /// Fetch all pull requests for a repository
+///
+/// This is a convenience function that uses RealGitHubClient.
+/// For testable code, prefer injecting a GitHubClient trait object.
 pub fn fetch_pull_requests(repo_id: &str) -> Result<Vec<PullRequest>> {
     commands::fetch_pull_requests(repo_id)
 }
 
 /// Fetch commits for a specific branch
+///
+/// This is a convenience function that uses RealGitHubClient.
+/// For testable code, prefer injecting a GitHubClient trait object.
 pub fn fetch_commits(repo_id: &str, branch_name: &str, branch_id: i64) -> Result<Vec<Commit>> {
     commands::fetch_commits(repo_id, branch_name, branch_id)
 }
@@ -38,6 +56,9 @@ pub fn classify_branch_status(
 
 /// Create a pull request for a branch
 /// Returns the PR URL on success
+///
+/// This is a convenience function that uses RealGitHubClient.
+/// For testable code, prefer injecting a GitHubClient trait object.
 pub fn create_pull_request(
     repo_id: &str,
     branch_name: &str,
