@@ -159,17 +159,32 @@ This is a Cargo workspace with two main packages:
 - `needs-sync.png` - 🔴 Red circle (unpushed commits or behind remote)
 - `stale.png` - ⚠️ Gray warning (old branches/PRs, no recent activity)
 
-#### Status Priority (Worst-Case Wins)
+#### Status Priority (Worst-Case Wins) - Traffic Light Analogy
 
 **CRITICAL**: When a repo has MULTIPLE statuses, show the most urgent action needed.
 
-**Workflow priority** (check in this order):
-1. **local-changes** (Priority 0 - YELLOW/WARNING): uncommitted_files > 0 ← **CHECK FIRST** (commit before push!)
-2. **needs-sync** (Priority 1 - RED/CRITICAL): unpushed_commits > 0 OR behind_commits > 0 **OR** repo.branches has any branch with ahead > 0 or behind > 0
-3. **stale** (Priority 2 - WHITE/INFO): unmerged_count > 0 (old feature branches)
-4. **complete** (Priority 3 - GREEN/SUCCESS): No pending work
+**TRAFFIC LIGHT PRIORITY** (lower number = more urgent):
+1. **needs-sync** (Priority 0 - RED 🛑 STOP): unpushed_commits > 0 OR behind_commits > 0 **OR** repo.branches has any branch with ahead > 0 or behind > 0
+   - Like a red STOP sign or red exclamation point
+   - **MOST URGENT** - Stop what you're doing and sync NOW
+   - Prevents conflicts, data loss, and confusion
 
-**Rationale**: Uncommitted files must be committed before pushing, so local-changes takes priority over needs-sync.
+2. **local-changes** (Priority 1 - YELLOW ⚠️ YIELD): uncommitted_files > 0
+   - Like a yellow YIELD sign or yellow question mark ("why is this not committed?")
+   - **2nd MOST URGENT** - Yield to commit/push this work before starting new work
+   - Prevents losing uncommitted changes
+
+3. **stale** (Priority 2 - WHITE ℹ️ INFO): unmerged_count > 0 (old feature branches)
+   - **Innocuous but should be cleaned up**
+   - Like merged branches that should be deleted
+   - Clean up when convenient
+
+4. **complete** (Priority 3 - GREEN ✅ GO): No pending work
+   - Like a green traffic light
+   - **LEAST URGENT** (actually, no urgency - all clear!)
+   - Ready to proceed with next feature or fix
+
+**Rationale**: Red (needs-sync) is MOST urgent because unpushed/unfetched commits can cause conflicts and data loss. Yellow (local-changes) is 2nd because uncommitted work can be lost. White (stale) is cleanup. Green means proceed.
 
 **CRITICAL - Dual Status Checking**:
 - **LOCAL status**: From `/api/local-repos/status` endpoint (filesystem git working directory)
@@ -178,10 +193,10 @@ This is a Cargo workspace with two main packages:
   - `repo.branches[].ahead`, `repo.branches[].behind`
 - **MUST check BOTH sources** for needs-sync: A repo with clean local working directory may still have branches that are ahead/behind on GitHub!
 
-**Example 1**: Repo has 15 uncommitted files AND 1 unpushed commit → Show **local-changes** (yellow, priority 0 beats priority 1)
-**Example 2**: Group has one repo with local-changes (yellow, priority 0) and one with needs-sync (red, priority 1) → Tab shows **local-changes** (yellow, minimum priority wins)
-**Example 3**: Group has one repo with needs-sync (red, priority 1) and one with stale (white, priority 2) → Tab shows **needs-sync** (red, minimum priority wins)
-**Example 4**: Repo has clean working directory (0 uncommitted, 0 unpushed) BUT has branch with behindBy: 34 on GitHub → Show **needs-sync** (red)
+**Example 1**: Repo has 15 uncommitted files AND 1 unpushed commit → Show **needs-sync** (red, priority 0 beats priority 1 - sync is more urgent!)
+**Example 2**: Group has one repo with needs-sync (red, priority 0) and one with local-changes (yellow, priority 1) → Tab shows **needs-sync** (red, minimum priority wins)
+**Example 3**: Group has one repo with local-changes (yellow, priority 1) and one with stale (white, priority 2) → Tab shows **local-changes** (yellow, minimum priority wins)
+**Example 4**: Repo has clean working directory (0 uncommitted, 0 unpushed) BUT has branch with behindBy: 34 on GitHub → Show **needs-sync** (red, priority 0 - STOP and sync!)
 
 #### Tab Icon Display Rules
 
@@ -196,16 +211,16 @@ let worst_priority = group.repos.iter()
 ```
 
 **Priority mapping:**
-- Priority 0 (local-changes, YELLOW) → tab shows local-changes icon
-- Priority 1 (needs-sync, RED) → tab shows needs-sync icon
-- Priority 2 (stale, WHITE) → tab shows stale icon
-- Priority 3 (complete, GREEN) → tab shows complete icon
+- Priority 0 (needs-sync, RED 🛑) → tab shows needs-sync icon
+- Priority 1 (local-changes, YELLOW ⚠️) → tab shows local-changes icon
+- Priority 2 (stale, WHITE ℹ️) → tab shows stale icon
+- Priority 3 (complete, GREEN ✅) → tab shows complete icon
 
 **Tab hover text shows ONLY the worst-case reason**:
-- local-changes: "Has local uncommitted changes"
-- needs-sync: "Has uncommitted, unpushed, or unfetched commits"
-- stale: "Has unmerged feature branches"
-- complete: "All repositories up to date"
+- needs-sync: "🛑 STOP: Has uncommitted, unpushed, or unfetched commits"
+- local-changes: "⚠️ YIELD: Has local uncommitted changes"
+- stale: "ℹ️ CLEAN UP: Has unmerged feature branches"
+- complete: "✅ PROCEED: All repositories up to date"
 
 DO NOT show multiple reasons in hover text - only the single worst-case reason.
 
@@ -214,10 +229,10 @@ DO NOT show multiple reasons in hover text - only the single worst-case reason.
 **Rows use the EXACT SAME `calculate_repo_status_priority()` function as tabs.**
 
 Each row shows the status of that individual repository:
-- Priority 0 (yellow): Has uncommitted files
-- Priority 1 (red): Has unpushed/behind commits OR branches ahead/behind on GitHub
-- Priority 2 (white): Has unmerged feature branches
-- Priority 3 (green): All clean
+- Priority 0 (RED 🛑 STOP): Has unpushed/behind commits OR branches ahead/behind on GitHub
+- Priority 1 (YELLOW ⚠️ YIELD): Has uncommitted files
+- Priority 2 (WHITE ℹ️ INFO): Has unmerged feature branches
+- Priority 3 (GREEN ✅ GO): All clean
 
 #### Implementation Location
 

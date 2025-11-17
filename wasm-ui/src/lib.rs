@@ -388,7 +388,7 @@ fn app() -> Html {
                         };
 
                         // Calculate worst-case status priority across all repos in tab
-                        // Priority: 0=local-changes (YELLOW), 1=needs-sync (RED), 2=stale (WHITE), 3=complete (GREEN)
+                        // TRAFFIC LIGHT PRIORITY: 0=RED (STOP), 1=YELLOW (YIELD), 2=WHITE (cleanup), 3=GREEN (GO)
                         // CRITICAL: Use the SAME calculation as individual repos, then take minimum (worst)
                         let worst_priority = group.repos.iter()
                             .map(|repo| calculate_repo_status_priority(repo, local_repo_statuses.get(&repo.id)))
@@ -397,10 +397,10 @@ fn app() -> Html {
 
                         // Use PNG icons from static/icons/ - show only worst-case status
                         let (status_icon, tab_class) = match worst_priority {
-                            0 => (html! { <img class="tab-status-icon" src="/icons/local-changes.png" alt="Local changes" title="Has local uncommitted changes" /> }, "tab-local-changes"),
-                            1 => (html! { <img class="tab-status-icon" src="/icons/needs-sync.png" alt="Needs sync" title="Has uncommitted, unpushed, or unfetched commits" /> }, "tab-needs-sync"),
-                            2 => (html! { <img class="tab-status-icon" src="/icons/stale.png" alt="Stale" title="Has unmerged feature branches" /> }, "tab-stale"),
-                            3 if !group.repos.is_empty() => (html! { <img class="tab-status-icon" src="/icons/complete.png" alt="Complete" title="All repositories up to date" /> }, "tab-complete"),
+                            0 => (html! { <img class="tab-status-icon" src="/icons/needs-sync.png" alt="Needs sync" title="🛑 STOP: Has uncommitted, unpushed, or unfetched commits" /> }, "tab-needs-sync"),
+                            1 => (html! { <img class="tab-status-icon" src="/icons/local-changes.png" alt="Local changes" title="⚠️ YIELD: Has local uncommitted changes" /> }, "tab-local-changes"),
+                            2 => (html! { <img class="tab-status-icon" src="/icons/stale.png" alt="Stale" title="ℹ️ CLEAN UP: Has unmerged feature branches" /> }, "tab-stale"),
+                            3 if !group.repos.is_empty() => (html! { <img class="tab-status-icon" src="/icons/complete.png" alt="Complete" title="✅ PROCEED: All repositories up to date" /> }, "tab-complete"),
                             _ => (html! {}, ""),
                         };
 
@@ -1713,23 +1713,17 @@ fn get_mock_groups() -> Vec<RepoGroup> {
 
 #[cfg(target_arch = "wasm32")]
 fn calculate_repo_status_priority(repo: &Repository, local_status: Option<&LocalRepoStatus>) -> u8 {
-    // Priority: 0 = local-changes (YELLOW - most urgent, must commit before push)
-    //           1 = needs-sync (RED - unpushed/unfetched commits or ahead/behind branches)
-    //           2 = stale (WHITE - old unmerged branches)
-    //           3 = complete (GREEN - all clean)
+    // TRAFFIC LIGHT PRIORITY (lower number = more urgent):
+    // Priority 0 = RED (needs-sync)    - 🛑 STOP - Red stop sign / red ! - MOST URGENT
+    // Priority 1 = YELLOW (local-changes) - ⚠️ YIELD - Yellow yield / yellow ? - 2nd urgent
+    // Priority 2 = WHITE (stale)       - ℹ️ CLEAN UP - Innocuous cleanup - 3rd
+    // Priority 3 = GREEN (complete)    - ✅ PROCEED - Green light, all clear - LEAST urgent
 
-    // CRITICAL: Check local uncommitted files FIRST
-    // Rationale: Must commit before you can push!
-    if let Some(status) = local_status {
-        if status.uncommitted_files > 0 {
-            return 0; // local-changes (yellow)
-        }
-    }
-
-    // Check for sync issues (unpushed/behind locally OR branches ahead/behind on GitHub)
+    // PRIORITY 0 (RED): Check for sync issues FIRST - MOST URGENT
+    // Unpushed/behind locally OR branches ahead/behind on GitHub
     if let Some(status) = local_status {
         if status.unpushed_commits > 0 || status.behind_commits > 0 {
-            return 1; // needs-sync (red)
+            return 0; // needs-sync (RED - STOP!)
         }
     }
 
@@ -1737,16 +1731,26 @@ fn calculate_repo_status_priority(repo: &Repository, local_status: Option<&Local
     // A repo can have clean working directory but still have branches that need sync!
     for branch in &repo.branches {
         if branch.ahead > 0 || branch.behind > 0 {
-            return 1; // needs-sync (red)
+            return 0; // needs-sync (RED - STOP!)
         }
     }
 
-    // Check for stale unmerged branches
-    if repo.unmerged_count > 0 {
-        return 2; // stale (white)
+    // PRIORITY 1 (YELLOW): Check local uncommitted files - 2nd URGENT
+    // Rationale: Yield to commit/push this work before starting new work
+    if let Some(status) = local_status {
+        if status.uncommitted_files > 0 {
+            return 1; // local-changes (YELLOW - YIELD!)
+        }
     }
 
-    3 // complete (green)
+    // PRIORITY 2 (WHITE): Check for stale unmerged branches - cleanup
+    // Innocuous but should be cleaned up (merged branches should be deleted)
+    if repo.unmerged_count > 0 {
+        return 2; // stale (WHITE - clean up when convenient)
+    }
+
+    // PRIORITY 3 (GREEN): All clear - ready to proceed
+    3 // complete (GREEN - GO! Ready for next feature)
 }
 
 #[cfg(target_arch = "wasm32")]
