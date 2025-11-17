@@ -538,6 +538,19 @@ pub fn create_pull_request(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Check if PR already exists - gh CLI includes the URL in the error message
+        if stderr.contains("already exists") {
+            // Extract the PR URL from the error message (usually on the last line)
+            if let Some(url_line) = stderr.lines().last() {
+                let url = url_line.trim();
+                if url.starts_with("https://github.com") {
+                    // Return the existing PR URL as success
+                    return Ok(url.to_string());
+                }
+            }
+        }
+
         return Err(Error::GitHubCLI(format!(
             "Failed to create PR for branch {}: {}",
             branch_name, stderr

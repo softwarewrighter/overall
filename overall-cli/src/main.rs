@@ -97,12 +97,7 @@ fn main() {
 
             // Process each repository
             for (i, repo) in repos.iter().enumerate() {
-                println!(
-                    "[{}/{}] Processing {}...",
-                    i + 1,
-                    repos.len(),
-                    repo.id
-                );
+                println!("[{}/{}] Processing {}...", i + 1, repos.len(), repo.id);
 
                 // Save repository
                 if let Err(e) = db.save_repository(repo) {
@@ -128,19 +123,32 @@ fn main() {
                                     // Fetch commits for branches with unmerged changes
                                     if branch.ahead_by > 0 {
                                         print!("  Fetching commits for {}...", branch.name);
-                                        match github::fetch_commits(&repo.id, &branch.name, branch_id) {
+                                        match github::fetch_commits(
+                                            &repo.id,
+                                            &branch.name,
+                                            branch_id,
+                                        ) {
                                             Ok(commits) => {
                                                 println!(" found {}", commits.len());
 
                                                 // Clear old commits for this branch
-                                                if let Err(e) = db.clear_commits_for_branch(branch_id) {
-                                                    eprintln!("    Error clearing old commits: {}", e);
+                                                if let Err(e) =
+                                                    db.clear_commits_for_branch(branch_id)
+                                                {
+                                                    eprintln!(
+                                                        "    Error clearing old commits: {}",
+                                                        e
+                                                    );
                                                 }
 
                                                 // Save commits
                                                 for commit in &commits {
                                                     if let Err(e) = db.save_commit(commit) {
-                                                        eprintln!("    Error saving commit {}: {}", &commit.sha[..7], e);
+                                                        eprintln!(
+                                                            "    Error saving commit {}: {}",
+                                                            &commit.sha[..7],
+                                                            e
+                                                        );
                                                     }
                                                 }
                                             }
@@ -227,7 +235,10 @@ fn main() {
 
                         // Get PR count
                         if let Ok(prs) = db.get_pull_requests_for_repo(&repo.id) {
-                            let open_prs = prs.iter().filter(|pr| matches!(pr.state, overall_cli::models::PRState::Open)).count();
+                            let open_prs = prs
+                                .iter()
+                                .filter(|pr| matches!(pr.state, overall_cli::models::PRState::Open))
+                                .count();
                             if open_prs > 0 {
                                 println!("   Open PRs: {}", open_prs);
                             }
@@ -271,8 +282,14 @@ fn main() {
                     let branches = db.get_branches_for_repo(&repo.id).unwrap_or_default();
                     let prs = db.get_pull_requests_for_repo(&repo.id).unwrap_or_default();
 
-                    let unmerged_count = branches.iter().filter(|b| b.ahead_by > 0 && b.behind_by == 0).count();
-                    let open_pr_count = prs.iter().filter(|pr| matches!(pr.state, overall_cli::models::PRState::Open)).count();
+                    let unmerged_count = branches
+                        .iter()
+                        .filter(|b| b.ahead_by > 0 && b.behind_by == 0)
+                        .count();
+                    let open_pr_count = prs
+                        .iter()
+                        .filter(|pr| matches!(pr.state, overall_cli::models::PRState::Open))
+                        .count();
 
                     group_repos.push(json!({
                         "id": repo.id,
@@ -326,46 +343,55 @@ fn main() {
                 let branches = db.get_branches_for_repo(&repo.id).unwrap_or_default();
                 let prs = db.get_pull_requests_for_repo(&repo.id).unwrap_or_default();
 
-                let unmerged_count = branches.iter().filter(|b| b.ahead_by > 0 && b.behind_by == 0).count();
-                let open_pr_count = prs.iter().filter(|pr| matches!(pr.state, overall_cli::models::PRState::Open)).count();
+                let unmerged_count = branches
+                    .iter()
+                    .filter(|b| b.ahead_by > 0 && b.behind_by == 0)
+                    .count();
+                let open_pr_count = prs
+                    .iter()
+                    .filter(|pr| matches!(pr.state, overall_cli::models::PRState::Open))
+                    .count();
 
-                export_data["ungrouped"].as_array_mut().unwrap().push(json!({
-                    "id": repo.id,
-                    "owner": repo.owner,
-                    "name": repo.name,
-                    "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
-                    "lastPush": repo.pushed_at.to_rfc3339(),
-                    "branches": branches.iter().map(|b| {
-                        let commits = db.get_commits_for_branch(b.id).unwrap_or_default();
-                        json!({
-                            "name": b.name,
-                            "sha": b.sha,
-                            "aheadBy": b.ahead_by,
-                            "behindBy": b.behind_by,
-                            "status": b.status.to_string(),
-                            "lastCommitDate": b.last_commit_date.to_rfc3339(),
-                            "commits": commits.iter().map(|c| json!({
-                                "sha": c.sha,
-                                "message": c.message,
-                                "authorName": c.author_name,
-                                "authorEmail": c.author_email,
-                                "authoredDate": c.authored_date.to_rfc3339(),
-                                "committerName": c.committer_name,
-                                "committerEmail": c.committer_email,
-                                "committedDate": c.committed_date.to_rfc3339(),
-                            })).collect::<Vec<_>>(),
-                        })
-                    }).collect::<Vec<_>>(),
-                    "pullRequests": prs.iter().map(|pr| json!({
-                        "number": pr.number,
-                        "title": pr.title,
-                        "state": pr.state.to_string(),
-                        "createdAt": pr.created_at.to_rfc3339(),
-                        "updatedAt": pr.updated_at.to_rfc3339(),
-                    })).collect::<Vec<_>>(),
-                    "unmergedCount": unmerged_count,
-                    "prCount": open_pr_count,
-                }));
+                export_data["ungrouped"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(json!({
+                        "id": repo.id,
+                        "owner": repo.owner,
+                        "name": repo.name,
+                        "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
+                        "lastPush": repo.pushed_at.to_rfc3339(),
+                        "branches": branches.iter().map(|b| {
+                            let commits = db.get_commits_for_branch(b.id).unwrap_or_default();
+                            json!({
+                                "name": b.name,
+                                "sha": b.sha,
+                                "aheadBy": b.ahead_by,
+                                "behindBy": b.behind_by,
+                                "status": b.status.to_string(),
+                                "lastCommitDate": b.last_commit_date.to_rfc3339(),
+                                "commits": commits.iter().map(|c| json!({
+                                    "sha": c.sha,
+                                    "message": c.message,
+                                    "authorName": c.author_name,
+                                    "authorEmail": c.author_email,
+                                    "authoredDate": c.authored_date.to_rfc3339(),
+                                    "committerName": c.committer_name,
+                                    "committerEmail": c.committer_email,
+                                    "committedDate": c.committed_date.to_rfc3339(),
+                                })).collect::<Vec<_>>(),
+                            })
+                        }).collect::<Vec<_>>(),
+                        "pullRequests": prs.iter().map(|pr| json!({
+                            "number": pr.number,
+                            "title": pr.title,
+                            "state": pr.state.to_string(),
+                            "createdAt": pr.created_at.to_rfc3339(),
+                            "updatedAt": pr.updated_at.to_rfc3339(),
+                        })).collect::<Vec<_>>(),
+                        "unmergedCount": unmerged_count,
+                        "prCount": open_pr_count,
+                    }));
             }
 
             // Create output directory if needed
@@ -385,12 +411,19 @@ fn main() {
 
             let total_groups = groups.len();
             let total_ungrouped = export_data["ungrouped"].as_array().unwrap().len();
-            println!("✓ Exported {} groups and {} ungrouped repositories to {}",
-                total_groups, total_ungrouped, output.display());
+            println!(
+                "✓ Exported {} groups and {} ungrouped repositories to {}",
+                total_groups,
+                total_ungrouped,
+                output.display()
+            );
         }
         Some(Commands::Serve { port, debug }) => {
             if debug {
-                println!("[DEBUG] Starting web server on port {} (debug mode enabled)...", port);
+                println!(
+                    "[DEBUG] Starting web server on port {} (debug mode enabled)...",
+                    port
+                );
             } else {
                 println!("Starting web server on port {}...", port);
             }
@@ -407,7 +440,9 @@ fn main() {
 
             // Run the server using tokio runtime
             let runtime = tokio::runtime::Runtime::new().unwrap();
-            if let Err(e) = runtime.block_on(overall_cli::server::serve(port, db_path, static_dir, debug)) {
+            if let Err(e) =
+                runtime.block_on(overall_cli::server::serve(port, db_path, static_dir, debug))
+            {
                 eprintln!("Server error: {}", e);
                 std::process::exit(1);
             }

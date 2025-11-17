@@ -18,9 +18,8 @@ pub fn scan_for_git_repos(root_path: &Path) -> Result<Vec<PathBuf>> {
     }
 
     // Read directory entries
-    let entries = std::fs::read_dir(root_path).map_err(|e| {
-        crate::Error::GitCommand(format!("Failed to read directory: {}", e))
-    })?;
+    let entries = std::fs::read_dir(root_path)
+        .map_err(|e| crate::Error::GitCommand(format!("Failed to read directory: {}", e)))?;
 
     for entry in entries {
         let entry = entry.map_err(|e| {
@@ -84,9 +83,7 @@ pub fn count_uncommitted_files(repo_path: &Path) -> Result<u32> {
         .args(["status", "--porcelain"])
         .current_dir(repo_path)
         .output()
-        .map_err(|e| {
-            crate::Error::GitCommand(format!("Failed to get git status: {}", e))
-        })?;
+        .map_err(|e| crate::Error::GitCommand(format!("Failed to get git status: {}", e)))?;
 
     if !output.status.success() {
         return Ok(0);
@@ -103,7 +100,11 @@ pub fn count_uncommitted_files(repo_path: &Path) -> Result<u32> {
 pub fn get_ahead_behind(repo_path: &Path, branch: &str) -> Result<(u32, u32)> {
     // First, try to get the upstream branch
     let upstream_output = Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", &format!("{}@{{upstream}}", branch)])
+        .args([
+            "rev-parse",
+            "--abbrev-ref",
+            &format!("{}@{{upstream}}", branch),
+        ])
         .current_dir(repo_path)
         .output()
         .map_err(|e| crate::Error::GitCommand(format!("Failed to get upstream: {}", e)))?;
@@ -120,7 +121,12 @@ pub fn get_ahead_behind(repo_path: &Path, branch: &str) -> Result<(u32, u32)> {
 
     // Get ahead/behind counts
     let output = Command::new("git")
-        .args(["rev-list", "--left-right", "--count", &format!("{}...{}", branch, upstream)])
+        .args([
+            "rev-list",
+            "--left-right",
+            "--count",
+            &format!("{}...{}", branch, upstream),
+        ])
         .current_dir(repo_path)
         .output()
         .map_err(|e| {
