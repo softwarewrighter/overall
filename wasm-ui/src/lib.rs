@@ -388,44 +388,20 @@ fn app() -> Html {
                         };
 
                         // Calculate worst-case status priority across all repos in tab
-                        // Priority: 0=local-changes (commit before push!), 1=needs-sync (unpushed/behind), 2=stale, 3=complete
-                        let has_local_changes = group.repos.iter().any(|repo| {
-                            if let Some(status) = local_repo_statuses.get(&repo.id) {
-                                status.uncommitted_files > 0
-                            } else {
-                                false
-                            }
-                        });
+                        // Priority: 0=local-changes (YELLOW), 1=needs-sync (RED), 2=stale (WHITE), 3=complete (GREEN)
+                        // CRITICAL: Use the SAME calculation as individual repos, then take minimum (worst)
+                        let worst_priority = group.repos.iter()
+                            .map(|repo| calculate_repo_status_priority(repo, local_repo_statuses.get(&repo.id)))
+                            .min()
+                            .unwrap_or(3); // Default to complete if no repos
 
-                        let has_needs_sync = !has_local_changes && group.repos.iter().any(|repo| {
-                            // Check local status first
-                            let local_needs_sync = if let Some(status) = local_repo_statuses.get(&repo.id) {
-                                status.unpushed_commits > 0 || status.behind_commits > 0
-                            } else {
-                                false
-                            };
-
-                            // Also check GitHub branch status (ahead/behind on remote)
-                            let github_needs_sync = repo.branches.iter().any(|b| b.ahead > 0 || b.behind > 0);
-
-                            local_needs_sync || github_needs_sync
-                        });
-
-                        let has_stale = !has_needs_sync && !has_local_changes && group.repos.iter().any(|repo| {
-                            repo.unmerged_count > 0
-                        });
-
-                        // Use PNG icons from static/icons/ - show only worst-case status with single reason
-                        let (status_icon, tab_class) = if has_local_changes {
-                            (html! { <img class="tab-status-icon" src="/icons/local-changes.png" alt="Local changes" title="Has local uncommitted changes" /> }, "tab-local-changes")
-                        } else if has_needs_sync {
-                            (html! { <img class="tab-status-icon" src="/icons/needs-sync.png" alt="Needs sync" title="Has uncommitted, unpushed, or unfetched commits" /> }, "tab-needs-sync")
-                        } else if has_stale {
-                            (html! { <img class="tab-status-icon" src="/icons/stale.png" alt="Stale" title="Has unmerged feature branches" /> }, "tab-stale")
-                        } else if !group.repos.is_empty() {
-                            (html! { <img class="tab-status-icon" src="/icons/complete.png" alt="Complete" title="All repositories up to date" /> }, "tab-complete")
-                        } else {
-                            (html! {}, "")
+                        // Use PNG icons from static/icons/ - show only worst-case status
+                        let (status_icon, tab_class) = match worst_priority {
+                            0 => (html! { <img class="tab-status-icon" src="/icons/local-changes.png" alt="Local changes" title="Has local uncommitted changes" /> }, "tab-local-changes"),
+                            1 => (html! { <img class="tab-status-icon" src="/icons/needs-sync.png" alt="Needs sync" title="Has uncommitted, unpushed, or unfetched commits" /> }, "tab-needs-sync"),
+                            2 => (html! { <img class="tab-status-icon" src="/icons/stale.png" alt="Stale" title="Has unmerged feature branches" /> }, "tab-stale"),
+                            3 if !group.repos.is_empty() => (html! { <img class="tab-status-icon" src="/icons/complete.png" alt="Complete" title="All repositories up to date" /> }, "tab-complete"),
+                            _ => (html! {}, ""),
                         };
 
                         html! {

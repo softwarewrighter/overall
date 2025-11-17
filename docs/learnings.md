@@ -561,6 +561,94 @@ fn test_sync_removes_deleted_branches() {
 - Erodes trust in the entire application
 - Can cause cascading errors (trying to create PRs for deleted branches)
 
+### 2025-11-17: Lost Code During Revert - NEVER Revert Without Backup
+
+**What Happened**:
+- Had broken code mixed with working changes in working directory
+- Decided to revert some changes to "fix" the problem
+- **Lost new working code entirely** by reverting without backup
+- Had to re-implement features that were already partially done
+- Wasted time recreating code that existed moments before
+
+**Root Cause**:
+- **Panic response**: Saw broken code, immediately reverted without thinking
+- **No backup**: Didn't save working changes before reverting
+- **Lost context**: Couldn't remember what was good vs bad in the revert
+- **No git stash**: Could have stashed changes before reverting
+
+**THE FIX - MANDATORY PROCESS**:
+
+**BEFORE reverting ANYTHING**:
+```bash
+# 1. ALWAYS create backup branch first
+git checkout -b backup/before-revert-$(date +%Y%m%d-%H%M%S)
+git add -A
+git commit -m "Backup before reverting [description]"
+
+# 2. Return to working branch
+git checkout main
+
+# 3. NOW you can safely revert
+git revert <commit>
+# OR
+git reset --hard HEAD~1
+
+# 4. If you need the old code later:
+git checkout backup/before-revert-20251117-054500 -- path/to/file.rs
+```
+
+**Even Better - Fix Instead of Revert**:
+```bash
+# PREFER: Fix the broken code
+# 1. Identify what's broken
+# 2. Fix just that part
+# 3. Keep the working changes
+# 4. Commit the fix
+
+# Instead of throwing away everything
+```
+
+**Why This Matters**:
+- Reverting loses ALL changes, good and bad
+- Can't distinguish between broken code and working features
+- Forces re-implementation of code that was already done
+- Wastes time and introduces new bugs in re-implementation
+- Creates frustration and destroys momentum
+
+**Prevention Strategies**:
+
+1. **Use Git Stash**:
+   ```bash
+   # Save current changes without committing
+   git stash save "WIP: status priority fix"
+
+   # Apply later when ready
+   git stash pop
+   ```
+
+2. **Use Backup Branches**:
+   - Create backup before any destructive operation
+   - Cheap to create, invaluable when needed
+   - Can cherry-pick good changes later
+
+3. **Fix Forward, Not Backward**:
+   - Identify the broken part
+   - Fix just that part
+   - Keep everything else
+   - Commit the fix
+
+4. **Incremental Commits**:
+   - Commit working features immediately
+   - Don't accumulate changes
+   - Smaller commits = easier to revert specific things
+
+**Commitment**:
+- **NEVER** run `git revert` or `git reset --hard` without backup first
+- **ALWAYS** prefer fixing broken code over reverting
+- **USE** `git stash` for quick WIP saves
+- **CREATE** backup branches before destructive operations
+- **THINK** before reverting: "What good code am I about to lose?"
+
 ### 2025-11-17: Missing WASM Build - CRITICAL PROCESS FAILURE
 
 **What Happened**:
