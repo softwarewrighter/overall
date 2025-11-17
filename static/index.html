@@ -52,6 +52,40 @@
             font-size: 0.9rem;
         }
 
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-refresh, .btn-settings {
+            background: rgba(110, 118, 129, 0.1);
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-refresh:hover, .btn-settings:hover {
+            background: rgba(110, 118, 129, 0.2);
+            color: #c9d1d9;
+            border-color: #58a6ff;
+        }
+
+        .btn-refresh:active, .btn-settings:active {
+            transform: scale(0.95);
+        }
+
         /* Tabs */
         .tabs {
             background: #161b22;
@@ -83,11 +117,6 @@
             background: rgba(110, 118, 129, 0.1);
         }
 
-        .tab.active {
-            color: #58a6ff;
-            border-bottom-color: #58a6ff;
-        }
-
         .tab-add {
             color: #3fb950;
             font-size: 1.2rem;
@@ -102,9 +131,34 @@
             font-weight: 600;
         }
 
-        .tab.active .repo-count {
-            background: rgba(88, 166, 255, 0.2);
-            color: #58a6ff;
+        /* Removed - status colors take precedence */
+
+        /* Tab status colors - distinct from selection */
+        .tab-critical {
+            color: #f85149 !important;
+            border-bottom-color: #f85149 !important;
+        }
+
+        .tab-warning {
+            color: #d29922 !important;
+            border-bottom-color: #d29922 !important;
+        }
+
+        .tab-clean {
+            color: #3fb950 !important;
+            border-bottom-color: #3fb950 !important;
+        }
+
+        /* Active tab styling - use bold + underline instead of color */
+        .tab.active {
+            font-weight: 700;
+            background: rgba(110, 118, 129, 0.15);
+        }
+
+        /* Tab status icons - larger and distinct from row icons */
+        .tab-status-icon {
+            font-size: 1.1rem;
+            margin-left: 4px;
         }
 
         /* Repository List */
@@ -114,6 +168,50 @@
             max-width: 1200px;
             width: 100%;
             margin: 0 auto;
+        }
+
+        /* Repository List Header */
+        .repo-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            margin-bottom: 16px;
+            background: #0d1117;
+            border-bottom: 2px solid #30363d;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .header-column {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #8b949e;
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s ease;
+        }
+
+        .header-column:hover {
+            color: #58a6ff;
+        }
+
+        .header-column.col-name {
+            flex: 2;
+        }
+
+        .header-column.col-language {
+            flex: 1;
+        }
+
+        .header-column.col-last-updated {
+            flex: 1;
+        }
+
+        .header-column.col-status {
+            flex: 1;
+            text-align: right;
         }
 
         .repo-row {
@@ -135,25 +233,31 @@
             transform: translateX(4px);
         }
 
-        .repo-info {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
+        .repo-row .col-name {
+            flex: 2;
+        }
+
+        .repo-row .col-language {
             flex: 1;
+        }
+
+        .repo-row .col-last-updated {
+            flex: 1;
+            color: #8b949e;
+            font-size: 0.9rem;
+        }
+
+        .repo-row .col-status {
+            flex: 1;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
         }
 
         .repo-name {
             font-size: 1.1rem;
             font-weight: 600;
             color: #c9d1d9;
-        }
-
-        .repo-meta {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            font-size: 0.85rem;
-            color: #8b949e;
         }
 
         .language-badge {
@@ -182,9 +286,9 @@
         }
 
         .status-indicator.warning {
-            background: rgba(248, 81, 73, 0.15);
-            color: #f85149;
-            border: 1px solid rgba(248, 81, 73, 0.3);
+            background: rgba(210, 153, 34, 0.15);
+            color: #d29922;
+            border: 1px solid rgba(210, 153, 34, 0.3);
         }
 
         .status-indicator.info {
@@ -278,6 +382,45 @@
             margin-bottom: 20px;
             font-size: 0.9rem;
             color: #8b949e;
+        }
+
+        .group-selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding: 12px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+        }
+
+        .group-selector label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #c9d1d9;
+        }
+
+        .group-selector select {
+            flex: 1;
+            padding: 8px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #c9d1d9;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .group-selector select:hover {
+            border-color: #58a6ff;
+        }
+
+        .group-selector select:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.1);
         }
 
         .modal-body h3 {
@@ -946,6 +1089,129 @@
             font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
             font-size: 0.8rem;
             color: #58a6ff;
+        }
+
+        /* Settings Modal Specific Styles */
+        .settings-modal {
+            max-width: 700px;
+        }
+
+        .settings-section {
+            margin-bottom: 24px;
+        }
+
+        .settings-section h3 {
+            margin: 0 0 8px 0;
+            font-size: 1.1rem;
+            color: #c9d1d9;
+        }
+
+        .settings-description {
+            color: #8b949e;
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+
+        .add-path-section {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .path-input {
+            flex: 1;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: #c9d1d9;
+            font-size: 0.9rem;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            transition: border-color 0.2s ease;
+        }
+
+        .path-input:focus {
+            outline: none;
+            border-color: #58a6ff;
+        }
+
+        .repo-roots-list {
+            margin-bottom: 20px;
+        }
+
+        .repo-root-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .repo-root-item:hover {
+            background: #161b22;
+            border-color: #58a6ff;
+        }
+
+        .root-path {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            color: #c9d1d9;
+            font-size: 0.9rem;
+            flex: 1;
+        }
+
+        .root-status {
+            color: #3fb950;
+            font-size: 0.85rem;
+            margin-right: 12px;
+        }
+
+        .btn-danger {
+            background: rgba(248, 81, 73, 0.1);
+            color: #f85149;
+            border: 1px solid #f85149;
+        }
+
+        .btn-danger:hover {
+            background: rgba(248, 81, 73, 0.2);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+
+        .scan-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .scan-help {
+            color: #8b949e;
+            font-size: 0.85rem;
+        }
+
+        .settings-button {
+            background: transparent;
+            border: 1px solid #30363d;
+            color: #8b949e;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.2s ease;
+            margin-left: auto;
+        }
+
+        .settings-button:hover {
+            background: rgba(110, 118, 129, 0.2);
+            color: #c9d1d9;
+            border-color: #58a6ff;
         }
 
         @media (max-width: 768px) {

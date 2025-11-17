@@ -38,6 +38,10 @@ enum Commands {
         /// Port to listen on
         #[arg(short, long, default_value = "8459")]
         port: u16,
+
+        /// Enable debug logging
+        #[arg(short, long)]
+        debug: bool,
     },
 }
 
@@ -384,8 +388,12 @@ fn main() {
             println!("✓ Exported {} groups and {} ungrouped repositories to {}",
                 total_groups, total_ungrouped, output.display());
         }
-        Some(Commands::Serve { port }) => {
-            println!("Starting web server on port {}...", port);
+        Some(Commands::Serve { port, debug }) => {
+            if debug {
+                println!("[DEBUG] Starting web server on port {} (debug mode enabled)...", port);
+            } else {
+                println!("Starting web server on port {}...", port);
+            }
 
             let db_path = get_db_path();
             let static_dir = std::path::PathBuf::from("static");
@@ -399,7 +407,7 @@ fn main() {
 
             // Run the server using tokio runtime
             let runtime = tokio::runtime::Runtime::new().unwrap();
-            if let Err(e) = runtime.block_on(overall_cli::server::serve(port, db_path, static_dir)) {
+            if let Err(e) = runtime.block_on(overall_cli::server::serve(port, db_path, static_dir, debug)) {
                 eprintln!("Server error: {}", e);
                 std::process::exit(1);
             }

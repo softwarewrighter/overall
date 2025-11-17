@@ -3,7 +3,7 @@
 
 use crate::storage::Database;
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -27,6 +27,14 @@ pub struct AppState {
 struct MoveRepoRequest {
     repo_id: String,
     target_group_id: Option<i64>, // None means move to ungrouped
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateGroupRequest {
+    group_name: String,
+    repo_ids: Vec<String>,
+    target_group_id: Option<i64>, // If None, create new group
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -93,7 +101,7 @@ struct ScanLocalReposRequest {
     // Empty - scans all enabled roots
 }
 
-pub async fn serve(port: u16, db_path: PathBuf, static_dir: PathBuf) -> anyhow::Result<()> {
+pub async fn serve(port: u16, db_path: PathBuf, static_dir: PathBuf, _debug: bool) -> anyhow::Result<()> {
     let db = Database::open_or_create(&db_path)?;
     let state = AppState {
         db: Arc::new(Mutex::new(db)),
@@ -103,6 +111,8 @@ pub async fn serve(port: u16, db_path: PathBuf, static_dir: PathBuf) -> anyhow::
     let app = Router::new()
         // API routes
         .route("/api/groups", get(list_groups))
+        .route("/api/groups/add-repos", post(add_repos_to_group))
+        .route("/api/groups/delete/:id", post(delete_group))
         .route("/api/repos/move", post(move_repo))
         .route("/api/repos/export", post(export_repos))
         .route("/api/pr/create", post(create_pr))
@@ -147,23 +157,178 @@ async fn list_groups(State(state): State<AppState>) -> Response {
     }
 }
 
+/// Helper function to regenerate repos.json from current database state
+fn regenerate_repos_json(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
+    use serde_json::json;
+
+    let db = state.db.lock().unwrap();
+
+    // Build JSON structure with groups
+    let mut export_data = json!({
+        "groups": [],
+        "ungrouped": []
+    });
+
+    // Export all groups
+    let groups = db.get_all_groups()?;
+    for group in &groups {
+        let repos = db.get_repos_in_group(group.id).unwrap_or_default();
+        let mut group_repos = Vec::new();
+
+        for repo in repos {
+            let branches = db.get_branches_for_repo(&repo.id).unwrap_or_default();
+            let prs = db.get_pull_requests_for_repo(&repo.id).unwrap_or_default();
+
+            let unmerged_count = branches
+                .iter()
+                .filter(|b| b.ahead_by > 0 && b.behind_by == 0)
+                .count();
+            let open_pr_count = prs
+                .iter()
+                .filter(|pr| matches!(pr.state, crate::models::PRState::Open))
+                .count();
+
+            group_repos.push(json!({
+                "id": repo.id,
+                "owner": repo.owner,
+                "name": repo.name,
+                "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
+                "lastPush": repo.pushed_at.to_rfc3339(),
+                "branches": branches.iter().map(|b| {
+                    let commits = db.get_commits_for_branch(b.id).unwrap_or_default();
+                    json!({
+                        "name": b.name,
+                        "sha": b.sha,
+                        "aheadBy": b.ahead_by,
+                        "behindBy": b.behind_by,
+                        "status": b.status.to_string(),
+                        "lastCommitDate": b.last_commit_date.to_rfc3339(),
+                        "commits": commits.iter().map(|c| json!({
+                            "sha": c.sha,
+                            "message": c.message,
+                            "authorName": c.author_name,
+                            "authorEmail": c.author_email,
+                            "authoredDate": c.authored_date.to_rfc3339(),
+                            "committerName": c.committer_name,
+                            "committerEmail": c.committer_email,
+                            "committedDate": c.committed_date.to_rfc3339(),
+                        })).collect::<Vec<_>>(),
+                    })
+                }).collect::<Vec<_>>(),
+                "pullRequests": prs.iter().map(|pr| json!({
+                    "number": pr.number,
+                    "title": pr.title,
+                    "state": pr.state.to_string(),
+                    "createdAt": pr.created_at.to_rfc3339(),
+                    "updatedAt": pr.updated_at.to_rfc3339(),
+                })).collect::<Vec<_>>(),
+                "unmergedCount": unmerged_count,
+                "prCount": open_pr_count,
+            }));
+        }
+
+        export_data["groups"].as_array_mut().unwrap().push(json!({
+            "id": group.id,
+            "name": group.name,
+            "repos": group_repos
+        }));
+    }
+
+    // Export ungrouped repositories
+    let ungrouped = db.get_ungrouped_repositories().unwrap_or_default();
+    for repo in ungrouped {
+        let branches = db.get_branches_for_repo(&repo.id).unwrap_or_default();
+        let prs = db.get_pull_requests_for_repo(&repo.id).unwrap_or_default();
+
+        let unmerged_count = branches
+            .iter()
+            .filter(|b| b.ahead_by > 0 && b.behind_by == 0)
+            .count();
+        let open_pr_count = prs
+            .iter()
+            .filter(|pr| matches!(pr.state, crate::models::PRState::Open))
+            .count();
+
+        export_data["ungrouped"].as_array_mut().unwrap().push(json!({
+            "id": repo.id,
+            "owner": repo.owner,
+            "name": repo.name,
+            "language": repo.language.unwrap_or_else(|| "Unknown".to_string()),
+            "lastPush": repo.pushed_at.to_rfc3339(),
+            "branches": branches.iter().map(|b| {
+                let commits = db.get_commits_for_branch(b.id).unwrap_or_default();
+                json!({
+                    "name": b.name,
+                    "sha": b.sha,
+                    "aheadBy": b.ahead_by,
+                    "behindBy": b.behind_by,
+                    "status": b.status.to_string(),
+                    "lastCommitDate": b.last_commit_date.to_rfc3339(),
+                    "commits": commits.iter().map(|c| json!({
+                        "sha": c.sha,
+                        "message": c.message,
+                        "authorName": c.author_name,
+                        "authorEmail": c.author_email,
+                        "authoredDate": c.authored_date.to_rfc3339(),
+                        "committerName": c.committer_name,
+                        "committerEmail": c.committer_email,
+                        "committedDate": c.committed_date.to_rfc3339(),
+                    })).collect::<Vec<_>>(),
+                })
+            }).collect::<Vec<_>>(),
+            "pullRequests": prs.iter().map(|pr| json!({
+                "number": pr.number,
+                "title": pr.title,
+                "state": pr.state.to_string(),
+                "createdAt": pr.created_at.to_rfc3339(),
+                "updatedAt": pr.updated_at.to_rfc3339(),
+            })).collect::<Vec<_>>(),
+            "unmergedCount": unmerged_count,
+            "prCount": open_pr_count,
+        }));
+    }
+
+    // Write to static/repos.json
+    let output_path = state.static_dir.join("repos.json");
+    let json_str = serde_json::to_string_pretty(&export_data)?;
+    std::fs::write(&output_path, json_str)?;
+
+    Ok(())
+}
+
 async fn move_repo(
     State(state): State<AppState>,
     Json(req): Json<MoveRepoRequest>,
 ) -> Response {
-    let db = state.db.lock().unwrap();
-    let result = if let Some(target_group_id) = req.target_group_id {
-        db.move_repo_to_group(&req.repo_id, target_group_id)
-    } else {
-        db.remove_repo_from_all_groups(&req.repo_id)
+    let result = {
+        let db = state.db.lock().unwrap();
+        if let Some(target_group_id) = req.target_group_id {
+            db.move_repo_to_group(&req.repo_id, target_group_id)
+        } else {
+            db.remove_repo_from_all_groups(&req.repo_id)
+        }
     };
 
     match result {
-        Ok(()) => Json(ApiResponse {
-            success: true,
-            message: "Repository moved successfully".to_string(),
-        })
-        .into_response(),
+        Ok(()) => {
+            // Regenerate repos.json after successful move
+            if let Err(e) = regenerate_repos_json(&state) {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse {
+                        success: false,
+                        message: format!("Repository moved but failed to update repos.json: {}", e),
+                    }),
+                )
+                    .into_response();
+            }
+
+            Json(ApiResponse {
+                success: true,
+                message: "Repository moved successfully".to_string(),
+            })
+            .into_response()
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse {
@@ -173,6 +338,115 @@ async fn move_repo(
         )
             .into_response(),
     }
+}
+
+async fn add_repos_to_group(
+    State(state): State<AppState>,
+    Json(req): Json<CreateGroupRequest>,
+) -> Response {
+    let group_id = if let Some(existing_group_id) = req.target_group_id {
+        // Use existing group
+        existing_group_id
+    } else {
+        // Create new group
+        let db = state.db.lock().unwrap();
+        let max_order = db.get_all_groups()
+            .unwrap_or_default()
+            .iter()
+            .map(|g| g.display_order)
+            .max()
+            .unwrap_or(-1);
+
+        match db.create_group(&req.group_name, max_order + 1) {
+            Ok(id) => id,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse {
+                        success: false,
+                        message: format!("Failed to create group: {}", e),
+                    }),
+                )
+                    .into_response();
+            }
+        }
+    };
+
+    // Add repos to the group
+    {
+        let db = state.db.lock().unwrap();
+        for repo_id in &req.repo_ids {
+            if let Err(e) = db.add_repo_to_group(repo_id, group_id) {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse {
+                        success: false,
+                        message: format!("Failed to add repository {}: {}", repo_id, e),
+                    }),
+                )
+                    .into_response();
+            }
+        }
+    }
+
+    // Regenerate repos.json
+    if let Err(e) = regenerate_repos_json(&state) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse {
+                success: false,
+                message: format!("Repositories added but failed to update repos.json: {}", e),
+            }),
+        )
+            .into_response();
+    }
+
+    Json(ApiResponse {
+        success: true,
+        message: format!(
+            "Successfully added {} repositories to group",
+            req.repo_ids.len()
+        ),
+    })
+    .into_response()
+}
+
+async fn delete_group(
+    State(state): State<AppState>,
+    Path(group_id): Path<i64>,
+) -> Response {
+    // Delete the group - repos will automatically become ungrouped due to CASCADE
+    {
+        let db = state.db.lock().unwrap();
+        if let Err(e) = db.delete_group(group_id) {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    success: false,
+                    message: format!("Failed to delete group: {}", e),
+                }),
+            )
+                .into_response();
+        }
+    }
+
+    // Regenerate repos.json
+    if let Err(e) = regenerate_repos_json(&state) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse {
+                success: false,
+                message: format!("Group deleted but failed to update repos.json: {}", e),
+            }),
+        )
+            .into_response();
+    }
+
+    Json(ApiResponse {
+        success: true,
+        message: "Successfully deleted group".to_string(),
+    })
+    .into_response()
 }
 
 async fn export_repos(State(state): State<AppState>) -> Response {
@@ -483,14 +757,29 @@ async fn add_local_repo_root(
             message: "Local repository root added successfully".to_string(),
         })
         .into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse {
-                success: false,
-                message: format!("Failed to add local repo root: {}", e),
-            }),
-        )
-            .into_response(),
+        Err(e) => {
+            let error_msg = e.to_string();
+            // Check if it's a UNIQUE constraint violation
+            if error_msg.contains("UNIQUE constraint failed") {
+                (
+                    StatusCode::CONFLICT,
+                    Json(ApiResponse {
+                        success: false,
+                        message: format!("Path '{}' is already configured", expanded_path),
+                    }),
+                )
+                    .into_response()
+            } else {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse {
+                        success: false,
+                        message: format!("Failed to add local repo root: {}", e),
+                    }),
+                )
+                    .into_response()
+            }
+        }
     }
 }
 

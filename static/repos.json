@@ -7,6 +7,45 @@
         {
           "branches": [
             {
+              "aheadBy": 1,
+              "behindBy": 0,
+              "commits": [],
+              "lastCommitDate": "2025-11-06T02:07:42+00:00",
+              "name": "claude/cloud-based-aiper-tool-011CUqoQFSY487vKc3ABFgXN",
+              "sha": "60ebab4e4f871a875661cd57debbbabb9bf85910",
+              "status": "ReadyForPR"
+            },
+            {
+              "aheadBy": 3,
+              "behindBy": 0,
+              "commits": [],
+              "lastCommitDate": "2025-11-15T17:58:24+00:00",
+              "name": "claude/summarize-emacs-agent-011CV4x2fUtgtjus2L4xmRqb",
+              "sha": "b95a579e596e7a2e9af33f49029100dfbfe5b95c",
+              "status": "ReadyForPR"
+            },
+            {
+              "aheadBy": 0,
+              "behindBy": 0,
+              "commits": [],
+              "lastCommitDate": "2025-09-07T04:29:18+00:00",
+              "name": "main",
+              "sha": "fbaaee2b95107faa13b323c27deae7e982190ff2",
+              "status": "ReadyForPR"
+            }
+          ],
+          "id": "softwarewrighter/emacs-agent",
+          "language": "Unknown",
+          "lastPush": "2025-11-15T17:58:35+00:00",
+          "name": "emacs-agent",
+          "owner": "softwarewrighter",
+          "prCount": 0,
+          "pullRequests": [],
+          "unmergedCount": 2
+        },
+        {
+          "branches": [
+            {
               "aheadBy": 0,
               "behindBy": 12,
               "commits": [],
@@ -294,36 +333,6 @@
           "prCount": 0,
           "pullRequests": [],
           "unmergedCount": 1
-        },
-        {
-          "branches": [
-            {
-              "aheadBy": 5,
-              "behindBy": 0,
-              "commits": [],
-              "lastCommitDate": "2025-11-15T17:56:28+00:00",
-              "name": "claude/summarize-content-015Y8f9dzPToTXRQec43Ep8r",
-              "sha": "9f4d5661f045f638dce0fad3507e0ba5bc2089e9",
-              "status": "ReadyForPR"
-            },
-            {
-              "aheadBy": 0,
-              "behindBy": 0,
-              "commits": [],
-              "lastCommitDate": "2025-07-11T18:26:46+00:00",
-              "name": "main",
-              "sha": "04e82d8f35114c837b15143cbdbb2b4b84e947f2",
-              "status": "ReadyForPR"
-            }
-          ],
-          "id": "softwarewrighter/ARPB",
-          "language": "Python",
-          "lastPush": "2025-11-15T17:56:47+00:00",
-          "name": "ARPB",
-          "owner": "softwarewrighter",
-          "prCount": 0,
-          "pullRequests": [],
-          "unmergedCount": 1
         }
       ]
     },
@@ -381,45 +390,6 @@
           "prCount": 0,
           "pullRequests": [],
           "unmergedCount": 0
-        },
-        {
-          "branches": [
-            {
-              "aheadBy": 1,
-              "behindBy": 0,
-              "commits": [],
-              "lastCommitDate": "2025-11-06T02:07:42+00:00",
-              "name": "claude/cloud-based-aiper-tool-011CUqoQFSY487vKc3ABFgXN",
-              "sha": "60ebab4e4f871a875661cd57debbbabb9bf85910",
-              "status": "ReadyForPR"
-            },
-            {
-              "aheadBy": 3,
-              "behindBy": 0,
-              "commits": [],
-              "lastCommitDate": "2025-11-15T17:58:24+00:00",
-              "name": "claude/summarize-emacs-agent-011CV4x2fUtgtjus2L4xmRqb",
-              "sha": "b95a579e596e7a2e9af33f49029100dfbfe5b95c",
-              "status": "ReadyForPR"
-            },
-            {
-              "aheadBy": 0,
-              "behindBy": 0,
-              "commits": [],
-              "lastCommitDate": "2025-09-07T04:29:18+00:00",
-              "name": "main",
-              "sha": "fbaaee2b95107faa13b323c27deae7e982190ff2",
-              "status": "ReadyForPR"
-            }
-          ],
-          "id": "softwarewrighter/emacs-agent",
-          "language": "Unknown",
-          "lastPush": "2025-11-15T17:58:35+00:00",
-          "name": "emacs-agent",
-          "owner": "softwarewrighter",
-          "prCount": 0,
-          "pullRequests": [],
-          "unmergedCount": 2
         },
         {
           "branches": [
@@ -521,6 +491,57 @@
           "prCount": 0,
           "pullRequests": [],
           "unmergedCount": 1
+        },
+        {
+          "branches": [
+            {
+              "aheadBy": 5,
+              "behindBy": 0,
+              "commits": [],
+              "lastCommitDate": "2025-11-15T17:56:28+00:00",
+              "name": "claude/summarize-content-015Y8f9dzPToTXRQec43Ep8r",
+              "sha": "9f4d5661f045f638dce0fad3507e0ba5bc2089e9",
+              "status": "ReadyForPR"
+            },
+            {
+              "aheadBy": 0,
+              "behindBy": 0,
+              "commits": [],
+              "lastCommitDate": "2025-07-11T18:26:46+00:00",
+              "name": "main",
+              "sha": "04e82d8f35114c837b15143cbdbb2b4b84e947f2",
+              "status": "ReadyForPR"
+            }
+          ],
+          "id": "softwarewrighter/ARPB",
+          "language": "Python",
+          "lastPush": "2025-11-15T17:56:47+00:00",
+          "name": "ARPB",
+          "owner": "softwarewrighter",
+          "prCount": 0,
+          "pullRequests": [],
+          "unmergedCount": 1
+        },
+        {
+          "branches": [
+            {
+              "aheadBy": 0,
+              "behindBy": 0,
+              "commits": [],
+              "lastCommitDate": "2025-11-15T04:01:09+00:00",
+              "name": "main",
+              "sha": "8a6ed7e27d06f1bb566514a399f760cb34f6de59",
+              "status": "ReadyForPR"
+            }
+          ],
+          "id": "softwarewrighter/n_body",
+          "language": "Rust",
+          "lastPush": "2025-11-15T04:01:17+00:00",
+          "name": "n_body",
+          "owner": "softwarewrighter",
+          "prCount": 0,
+          "pullRequests": [],
+          "unmergedCount": 0
         },
         {
           "branches": [
@@ -1489,27 +1510,6 @@
       "language": "Shell",
       "lastPush": "2025-11-15T17:56:07+00:00",
       "name": "Chaparral",
-      "owner": "softwarewrighter",
-      "prCount": 0,
-      "pullRequests": [],
-      "unmergedCount": 0
-    },
-    {
-      "branches": [
-        {
-          "aheadBy": 0,
-          "behindBy": 0,
-          "commits": [],
-          "lastCommitDate": "2025-11-15T04:01:09+00:00",
-          "name": "main",
-          "sha": "8a6ed7e27d06f1bb566514a399f760cb34f6de59",
-          "status": "ReadyForPR"
-        }
-      ],
-      "id": "softwarewrighter/n_body",
-      "language": "Rust",
-      "lastPush": "2025-11-15T04:01:17+00:00",
-      "name": "n_body",
       "owner": "softwarewrighter",
       "prCount": 0,
       "pullRequests": [],

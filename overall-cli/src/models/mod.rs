@@ -140,6 +140,7 @@ pub struct AIAnalysis {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct LocalRepoRoot {
     pub id: i64,
     pub path: String,

@@ -95,6 +95,22 @@ struct LocalRepoStatus {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[derive(Clone, PartialEq, Copy)]
+enum SortColumn {
+    Name,
+    Language,
+    LastUpdated,
+    Status,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, PartialEq)]
+struct SortState {
+    column: SortColumn,
+    ascending: bool,
+}
+
+#[cfg(target_arch = "wasm32")]
 #[function_component(App)]
 fn app() -> Html {
     let groups = use_state(|| Vec::<RepoGroup>::new());
@@ -104,6 +120,10 @@ fn app() -> Html {
     let show_settings = use_state(|| false);
     let dragged_repo_id = use_state(|| None::<String>);
     let local_repo_statuses = use_state(|| std::collections::HashMap::<String, LocalRepoStatus>::new());
+    let sort_state = use_state(|| SortState {
+        column: SortColumn::Status,
+        ascending: false,
+    });
     let build_info = use_state(|| BuildInfo {
         version: "0.1.0".to_string(),
         build_date: "Loading...".to_string(),
@@ -143,12 +163,38 @@ fn app() -> Html {
         let local_repo_statuses = local_repo_statuses.clone();
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
-                if let Ok(statuses) = fetch_local_repo_statuses().await {
-                    let status_map: std::collections::HashMap<String, LocalRepoStatus> = statuses
-                        .into_iter()
-                        .map(|s| (s.repo_id.clone(), s))
-                        .collect();
-                    local_repo_statuses.set(status_map);
+                web_sys::console::log_1(&"[App] Fetching local repo statuses...".into());
+                match fetch_local_repo_statuses().await {
+                    Ok(statuses) => {
+                        web_sys::console::log_1(&format!("[App] Loaded {} local repo statuses", statuses.len()).into());
+
+                        // Debug log sw-install specifically
+                        if let Some(sw_install_status) = statuses.iter().find(|s| s.repo_id.contains("sw-install")) {
+                            web_sys::console::log_1(&format!(
+                                "[App] sw-install status: uncommitted={}, is_dirty={}",
+                                sw_install_status.uncommitted_files, sw_install_status.is_dirty
+                            ).into());
+                        } else {
+                            web_sys::console::log_1(&"[App] sw-install NOT found in fetched statuses!".into());
+                        }
+
+                        let status_map: std::collections::HashMap<String, LocalRepoStatus> = statuses
+                            .into_iter()
+                            .map(|s| (s.repo_id.clone(), s))
+                            .collect();
+
+                        // Debug the HashMap key for sw-install
+                        if status_map.contains_key("softwarewrighter/sw-install") {
+                            web_sys::console::log_1(&"[App] HashMap contains 'softwarewrighter/sw-install' key".into());
+                        } else {
+                            web_sys::console::log_1(&"[App] HashMap does NOT contain 'softwarewrighter/sw-install' key!".into());
+                        }
+
+                        local_repo_statuses.set(status_map);
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("[App] ERROR fetching local repo statuses: {}", e).into());
+                    }
                 }
             });
             || ()
@@ -204,6 +250,39 @@ fn app() -> Html {
         })
     };
 
+    let on_refresh = {
+        let groups = groups.clone();
+        let local_repo_statuses = local_repo_statuses.clone();
+        Callback::from(move |_| {
+            let groups = groups.clone();
+            let local_repo_statuses = local_repo_statuses.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                // Trigger the scan
+                if let Err(e) = trigger_local_repo_scan().await {
+                    web_sys::console::error_1(&format!("Failed to trigger scan: {}", e).into());
+                    return;
+                }
+
+                // Wait a bit for scan to complete
+                gloo::timers::future::sleep(std::time::Duration::from_millis(1000)).await;
+
+                // Reload repo data
+                if let Ok(loaded_groups) = fetch_repos().await {
+                    groups.set(loaded_groups);
+                }
+
+                // Reload local repo statuses
+                if let Ok(statuses) = fetch_local_repo_statuses().await {
+                    let status_map: std::collections::HashMap<String, LocalRepoStatus> = statuses
+                        .into_iter()
+                        .map(|s| (s.repo_id.clone(), s))
+                        .collect();
+                    local_repo_statuses.set(status_map);
+                }
+            });
+        })
+    };
+
     let on_drag_start = {
         let dragged_repo_id = dragged_repo_id.clone();
         Callback::from(move |repo_id: String| {
@@ -232,6 +311,27 @@ fn app() -> Html {
         })
     };
 
+    let on_sort_column_click = {
+        let sort_state = sort_state.clone();
+        Callback::from(move |column: SortColumn| {
+            let current = (*sort_state).clone();
+            if current.column == column {
+                // Toggle direction if clicking same column
+                sort_state.set(SortState {
+                    column,
+                    ascending: !current.ascending,
+                });
+            } else {
+                // New column - default to descending for Status, ascending for others
+                let ascending = match column {
+                    SortColumn::Status => false,
+                    _ => true,
+                };
+                sort_state.set(SortState { column, ascending });
+            }
+        })
+    };
+
     html! {
         <>
             <div class="app-container">
@@ -241,6 +341,9 @@ fn app() -> Html {
                         <span class="tagline">{ "Repository Manager" }</span>
                     </div>
                     <div class="header-right">
+                        <button class="btn-refresh" onclick={on_refresh} title="Refresh local repository status">
+                            { "🔄" }
+                        </button>
                         <button class="btn-settings" onclick={on_open_settings} title="Local Repository Settings">
                             { "⚙️" }
                         </button>
@@ -269,15 +372,39 @@ fn app() -> Html {
                             })
                         };
 
+                        // Calculate group status based on repos - reflect worst case
+                        let has_critical = group.repos.iter().any(|repo| {
+                            if let Some(status) = local_repo_statuses.get(&repo.id) {
+                                status.unpushed_commits > 0 || status.behind_commits > 0 || status.uncommitted_files > 0
+                            } else {
+                                false
+                            }
+                        });
+
+                        let has_warning = !has_critical && group.repos.iter().any(|repo| {
+                            repo.unmerged_count > 0
+                        });
+
+                        let (status_icon, tab_class) = if has_critical {
+                            (html! { <span class="tab-status-icon" title="Has uncommitted, unpushed, or unfetched commits">{ "🛑" }</span> }, "tab-critical")
+                        } else if has_warning {
+                            (html! { <span class="tab-status-icon" title="Has unmerged feature branches">{ "▲" }</span> }, "tab-warning")
+                        } else if !group.repos.is_empty() {
+                            (html! { <span class="tab-status-icon" title="All repos clean">{ "✓" }</span> }, "tab-clean")
+                        } else {
+                            (html! {}, "")
+                        };
+
                         html! {
                             <button
-                                class={classes!("tab", (*active_tab == idx).then_some("active"))}
+                                class={classes!("tab", tab_class, (*active_tab == idx).then_some("active"))}
                                 {onclick}
                                 {ondragover}
                                 {ondrop}
                             >
                                 { &group.name }
                                 <span class="repo-count">{ group.repos.len() }</span>
+                                { status_icon }
                             </button>
                         }
                     })}
@@ -286,9 +413,17 @@ fn app() -> Html {
 
                 <main class="repo-list">
                     { if let Some(group) = groups.get(*active_tab) {
+                        // Clone repos and sort them
+                        let mut sorted_repos = group.repos.clone();
+                        sort_repositories(&mut sorted_repos, &*sort_state, &*local_repo_statuses);
+
                         html! {
                             <>
-                                { for group.repos.iter().map(|repo| {
+                                <RepoListHeader
+                                    sort_state={(*sort_state).clone()}
+                                    on_column_click={on_sort_column_click.clone()}
+                                />
+                                { for sorted_repos.iter().map(|repo| {
                                     let onclick = {
                                         let on_repo_click = on_repo_click.clone();
                                         let repo = repo.clone();
@@ -296,6 +431,16 @@ fn app() -> Html {
                                     };
                                     let on_drag_start = on_drag_start.clone();
                                     let local_status = local_repo_statuses.get(&repo.id).cloned();
+
+                                    // Debug log for sw-install
+                                    if repo.id.contains("sw-install") {
+                                        if local_status.is_some() {
+                                            web_sys::console::log_1(&format!("[App] Looked up local_status for '{}' - FOUND", repo.id).into());
+                                        } else {
+                                            web_sys::console::log_1(&format!("[App] Looked up local_status for '{}' - NOT FOUND", repo.id).into());
+                                        }
+                                    }
+
                                     html! {
                                         <RepoRow repo={repo.clone()} {onclick} {on_drag_start} {local_status} />
                                     }
@@ -328,7 +473,7 @@ fn app() -> Html {
             </div>
 
             { if let Some(repo) = (*selected_repo).clone() {
-                html! { <RepoDetailModal repo={repo} on_close={on_close_modal} /> }
+                html! { <RepoDetailModal repo={repo} groups={(*groups).clone()} on_close={on_close_modal} /> }
             } else {
                 html! {}
             }}
@@ -350,6 +495,62 @@ fn app() -> Html {
 
 #[cfg(target_arch = "wasm32")]
 #[derive(Properties, PartialEq)]
+struct RepoListHeaderProps {
+    sort_state: SortState,
+    on_column_click: Callback<SortColumn>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[function_component(RepoListHeader)]
+fn repo_list_header(props: &RepoListHeaderProps) -> Html {
+    let on_name_click = {
+        let on_column_click = props.on_column_click.clone();
+        Callback::from(move |_| on_column_click.emit(SortColumn::Name))
+    };
+
+    let on_language_click = {
+        let on_column_click = props.on_column_click.clone();
+        Callback::from(move |_| on_column_click.emit(SortColumn::Language))
+    };
+
+    let on_last_updated_click = {
+        let on_column_click = props.on_column_click.clone();
+        Callback::from(move |_| on_column_click.emit(SortColumn::LastUpdated))
+    };
+
+    let on_status_click = {
+        let on_column_click = props.on_column_click.clone();
+        Callback::from(move |_| on_column_click.emit(SortColumn::Status))
+    };
+
+    let sort_indicator = |column: SortColumn| -> &'static str {
+        if props.sort_state.column == column {
+            if props.sort_state.ascending { " ▲" } else { " ▼" }
+        } else {
+            ""
+        }
+    };
+
+    html! {
+        <div class="repo-list-header">
+            <div class="header-column col-name" onclick={on_name_click}>
+                { "Name" }{ sort_indicator(SortColumn::Name) }
+            </div>
+            <div class="header-column col-language" onclick={on_language_click}>
+                { "Language" }{ sort_indicator(SortColumn::Language) }
+            </div>
+            <div class="header-column col-last-updated" onclick={on_last_updated_click}>
+                { "Last Updated" }{ sort_indicator(SortColumn::LastUpdated) }
+            </div>
+            <div class="header-column col-status" onclick={on_status_click}>
+                { "Status" }{ sort_indicator(SortColumn::Status) }
+            </div>
+        </div>
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Properties, PartialEq)]
 struct RepoRowProps {
     repo: Repository,
     onclick: Callback<()>,
@@ -361,6 +562,19 @@ struct RepoRowProps {
 #[function_component(RepoRow)]
 fn repo_row(props: &RepoRowProps) -> Html {
     let repo = &props.repo;
+
+    // Debug logging for sw-install
+    if repo.id.contains("sw-install") {
+        if let Some(ref status) = props.local_status {
+            web_sys::console::log_1(&format!(
+                "[RepoRow] sw-install status: uncommitted={}, unpushed={}, is_dirty={}",
+                status.uncommitted_files, status.unpushed_commits, status.is_dirty
+            ).into());
+        } else {
+            web_sys::console::log_1(&"[RepoRow] sw-install has NO local_status!".into());
+        }
+    }
+
     let onclick = {
         let onclick = props.onclick.clone();
         Callback::from(move |_| onclick.emit(()))
@@ -377,14 +591,16 @@ fn repo_row(props: &RepoRowProps) -> Html {
 
     html! {
         <div class="repo-row" draggable="true" {ondragstart} {onclick}>
-            <div class="repo-info">
+            <div class="col-name">
                 <span class="repo-name">{ &repo.id }</span>
-                <span class="repo-meta">
-                    <span class="language-badge">{ &repo.language }</span>
-                    <span class="last-push">{ &repo.last_push }</span>
-                </span>
             </div>
-            <div class="repo-status">
+            <div class="col-language">
+                <span class="language-badge">{ &repo.language }</span>
+            </div>
+            <div class="col-last-updated">
+                <span class="last-push">{ &repo.last_push }</span>
+            </div>
+            <div class="col-status repo-status">
                 { if let Some(status) = &props.local_status {
                     if status.uncommitted_files > 0 {
                         html! {
@@ -416,7 +632,7 @@ fn repo_row(props: &RepoRowProps) -> Html {
                 { if repo.unmerged_count > 0 {
                     html! {
                         <span class="status-indicator warning" title="Unmerged branches">
-                            <span class="icon">{ "⚠" }</span>
+                            <span class="icon">{ "◆" }</span>
                             <span class="count">{ repo.unmerged_count }</span>
                         </span>
                     }
@@ -451,6 +667,7 @@ fn repo_row(props: &RepoRowProps) -> Html {
 #[derive(Properties, PartialEq)]
 struct RepoDetailModalProps {
     repo: Repository,
+    groups: Vec<RepoGroup>,
     on_close: Callback<()>,
 }
 
@@ -458,6 +675,11 @@ struct RepoDetailModalProps {
 #[function_component(RepoDetailModal)]
 fn repo_detail_modal(props: &RepoDetailModalProps) -> Html {
     let repo = &props.repo;
+
+    // Find current group for this repo
+    let current_group_id = props.groups.iter()
+        .find(|g| g.repos.iter().any(|r| r.id == repo.id))
+        .and_then(|g| g.id);
 
     let on_backdrop_click = {
         let on_close = props.on_close.clone();
@@ -467,6 +689,28 @@ fn repo_detail_modal(props: &RepoDetailModalProps) -> Html {
     let on_modal_click = Callback::from(|e: MouseEvent| {
         e.stop_propagation();
     });
+
+    let on_group_change = {
+        let repo_id = repo.id.clone();
+        Callback::from(move |e: Event| {
+            let select: web_sys::HtmlSelectElement = e.target_unchecked_into();
+            let new_group_id = if select.value() == "ungrouped" {
+                None
+            } else {
+                Some(select.value().parse::<i64>().unwrap())
+            };
+
+            let repo_id = repo_id.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Err(e) = move_repo_to_group(&repo_id, new_group_id).await {
+                    web_sys::console::error_1(&format!("Failed to move repo: {}", e).into());
+                } else {
+                    // Reload page to reflect changes
+                    web_sys::window().unwrap().location().reload().ok();
+                }
+            });
+        })
+    };
 
     let ready_for_pr = repo
         .branches
@@ -501,6 +745,23 @@ fn repo_detail_modal(props: &RepoDetailModalProps) -> Html {
                     <div class="repo-detail-meta">
                         <span class="language-badge">{ &repo.language }</span>
                         <span class="last-push">{ format!("Last push: {}", &repo.last_push) }</span>
+                    </div>
+
+                    <div class="group-selector">
+                        <label for="group-select">{ "Group: " }</label>
+                        <select id="group-select" onchange={on_group_change}>
+                            <option value="ungrouped" selected={current_group_id.is_none()}>
+                                { "Ungrouped" }
+                            </option>
+                            { for props.groups.iter().map(|group| {
+                                let is_selected = Some(group.id.unwrap_or(0)) == current_group_id;
+                                html! {
+                                    <option value={group.id.unwrap_or(0).to_string()} selected={is_selected}>
+                                        { &group.name }
+                                    </option>
+                                }
+                            })}
+                        </select>
                     </div>
 
                     <div class="branch-summary">
@@ -786,11 +1047,12 @@ fn add_repo_dialog(props: &AddRepoDialogProps) -> Html {
         })
     };
 
-    let on_generate_sql = {
+    let on_add_repos = {
         let selected_repos = selected_repos.clone();
         let target_group = target_group.clone();
         let new_group_name = new_group_name.clone();
         let create_new_group = create_new_group.clone();
+        let all_groups = props.groups.clone();
         let on_close = props.on_close.clone();
 
         Callback::from(move |_| {
@@ -824,53 +1086,64 @@ fn add_repo_dialog(props: &AddRepoDialogProps) -> Html {
                 }
             };
 
-            // Generate SQL script
-            let mut sql = String::new();
+            // Find the group ID if using existing group
+            let target_group_id: Option<i64> = if !*create_new_group {
+                all_groups
+                    .iter()
+                    .find(|g| g.name == group_name)
+                    .map(|g| g.id)
+            } else {
+                None
+            }.flatten();
 
-            if *create_new_group {
-                sql.push_str("-- Create new group\n");
-                sql.push_str(&format!(
-                    "INSERT OR IGNORE INTO groups (name, display_order, created_at) \n\
-                     SELECT '{}', COALESCE(MAX(display_order) + 1, 0), datetime('now', 'utc') || 'Z' \n\
-                     FROM groups;\n\n",
-                    group_name.replace('\'', "''")
-                ));
-            }
+            let repo_ids: Vec<String> = (*selected_repos).iter().cloned().collect();
+            let on_close = on_close.clone();
 
-            sql.push_str(&format!("-- Add repositories to group '{}'\n", group_name));
-            for repo_id in (*selected_repos).iter() {
-                sql.push_str(&format!(
-                    "INSERT OR IGNORE INTO repo_groups (repo_id, group_id, added_at)\n\
-                     SELECT '{}', id, datetime('now', 'utc') || 'Z' FROM groups WHERE name = '{}';\n",
-                    repo_id.replace('\'', "''"),
-                    group_name.replace('\'', "''")
-                ));
-            }
+            // Call the API
+            wasm_bindgen_futures::spawn_local(async move {
+                use gloo::net::http::Request;
+                use serde::Serialize;
 
-            // Download the SQL file
-            let blob_options = web_sys::BlobPropertyBag::new();
-            blob_options.set_type("text/plain");
-            let blob = web_sys::Blob::new_with_str_sequence_and_options(
-                &js_sys::Array::of1(&wasm_bindgen::JsValue::from_str(&sql)),
-                &blob_options,
-            )
-            .unwrap();
+                #[derive(Serialize)]
+                #[serde(rename_all = "camelCase")]
+                struct AddReposRequest {
+                    group_name: String,
+                    repo_ids: Vec<String>,
+                    target_group_id: Option<i64>,
+                }
 
-            let url = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
-            let document = web_sys::window().unwrap().document().unwrap();
-            let a: web_sys::HtmlAnchorElement = document
-                .create_element("a")
-                .unwrap()
-                .dyn_into()
-                .unwrap();
+                let request_body = AddReposRequest {
+                    group_name,
+                    repo_ids,
+                    target_group_id,
+                };
 
-            a.set_href(&url);
-            a.set_download("add-repos.sql");
-            a.click();
-
-            web_sys::Url::revoke_object_url(&url).unwrap();
-
-            on_close.emit(());
+                match Request::post("/api/groups/add-repos")
+                    .header("Content-Type", "application/json")
+                    .json(&request_body)
+                {
+                    Ok(req) => match req.send().await {
+                        Ok(_) => {
+                            // Close the modal
+                            on_close.emit(());
+                            // Reload the page to show updated groups
+                            web_sys::window().unwrap().location().reload().ok();
+                        }
+                        Err(e) => {
+                            web_sys::window()
+                                .unwrap()
+                                .alert_with_message(&format!("Failed to add repositories: {:?}", e))
+                                .unwrap();
+                        }
+                    },
+                    Err(e) => {
+                        web_sys::window()
+                            .unwrap()
+                            .alert_with_message(&format!("Failed to create request: {:?}", e))
+                            .unwrap();
+                    }
+                }
+            });
         })
     };
 
@@ -979,10 +1252,10 @@ fn add_repo_dialog(props: &AddRepoDialogProps) -> Html {
                     <div class="add-repo-actions">
                         <button
                             class="btn btn-primary"
-                            onclick={on_generate_sql}
+                            onclick={on_add_repos}
                             disabled={selected_repos.is_empty()}
                         >
-                            { format!("Generate SQL ({} selected)", selected_repos.len()) }
+                            { format!("Add to Group ({} selected)", selected_repos.len()) }
                         </button>
                         <button class="btn btn-secondary" onclick={on_close_button_click.clone()}>
                             { "Cancel" }
@@ -1017,8 +1290,15 @@ fn settings_dialog(props: &SettingsDialogProps) -> Html {
         let local_repo_roots = local_repo_roots.clone();
         use_effect_with((), move |_| {
             wasm_bindgen_futures::spawn_local(async move {
-                if let Ok(roots) = fetch_local_repo_roots().await {
-                    local_repo_roots.set(roots);
+                web_sys::console::log_1(&"[SettingsDialog] Fetching local repo roots...".into());
+                match fetch_local_repo_roots().await {
+                    Ok(roots) => {
+                        web_sys::console::log_1(&format!("[SettingsDialog] Fetched {} roots", roots.len()).into());
+                        local_repo_roots.set(roots);
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("[SettingsDialog] Error fetching roots: {}", e).into());
+                    }
                 }
             });
             || ()
@@ -1052,16 +1332,31 @@ fn settings_dialog(props: &SettingsDialogProps) -> Html {
         let local_repo_roots = local_repo_roots.clone();
         Callback::from(move |_| {
             let path = (*new_path).clone();
+            web_sys::console::log_1(&format!("[SettingsDialog] Add path clicked: '{}'", path).into());
             if path.trim().is_empty() {
+                web_sys::console::log_1(&"[SettingsDialog] Path is empty, ignoring".into());
                 return;
             }
             let new_path = new_path.clone();
             let local_repo_roots = local_repo_roots.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                if add_local_repo_root(&path).await.is_ok() {
-                    new_path.set(String::new());
-                    if let Ok(roots) = fetch_local_repo_roots().await {
-                        local_repo_roots.set(roots);
+                web_sys::console::log_1(&format!("[SettingsDialog] Adding path: {}", path).into());
+                match add_local_repo_root(&path).await {
+                    Ok(()) => {
+                        web_sys::console::log_1(&"[SettingsDialog] Path added successfully".into());
+                        new_path.set(String::new());
+                        web_sys::console::log_1(&"[SettingsDialog] Refreshing roots list...".into());
+                        if let Ok(roots) = fetch_local_repo_roots().await {
+                            web_sys::console::log_1(&format!("[SettingsDialog] Updated list has {} roots", roots.len()).into());
+                            local_repo_roots.set(roots);
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("[SettingsDialog] Error adding path: {}", e).into());
+                        // Show error to user
+                        if let Some(window) = web_sys::window() {
+                            let _ = window.alert_with_message(&format!("Error: {}", e));
+                        }
                     }
                 }
             });
@@ -1115,12 +1410,36 @@ fn settings_dialog(props: &SettingsDialogProps) -> Html {
                                 html! {
                                     <>
                                         { for local_repo_roots.iter().map(|root| {
+                                            let root_id = root.id;
+                                            let local_repo_roots = local_repo_roots.clone();
+                                            let on_delete = Callback::from(move |_| {
+                                                let local_repo_roots = local_repo_roots.clone();
+                                                wasm_bindgen_futures::spawn_local(async move {
+                                                    web_sys::console::log_1(&format!("[SettingsDialog] Deleting root {}", root_id).into());
+                                                    match remove_local_repo_root(root_id).await {
+                                                        Ok(()) => {
+                                                            web_sys::console::log_1(&"[SettingsDialog] Root deleted successfully".into());
+                                                            if let Ok(roots) = fetch_local_repo_roots().await {
+                                                                web_sys::console::log_1(&format!("[SettingsDialog] Updated list has {} roots", roots.len()).into());
+                                                                local_repo_roots.set(roots);
+                                                            }
+                                                        }
+                                                        Err(e) => {
+                                                            web_sys::console::error_1(&format!("[SettingsDialog] Error deleting root: {}", e).into());
+                                                            if let Some(window) = web_sys::window() {
+                                                                let _ = window.alert_with_message(&format!("Error: {}", e));
+                                                            }
+                                                        }
+                                                    }
+                                                });
+                                            });
                                             html! {
                                                 <div class="repo-root-item">
                                                     <span class="root-path">{ &root.path }</span>
                                                     <span class="root-status">
                                                         { if root.enabled { "✓ Enabled" } else { "Disabled" } }
                                                     </span>
+                                                    <button class="btn btn-danger btn-sm" onclick={on_delete}>{ "✕" }</button>
                                                 </div>
                                             }
                                         })}
@@ -1343,6 +1662,46 @@ fn get_mock_groups() -> Vec<RepoGroup> {
 }
 
 #[cfg(target_arch = "wasm32")]
+fn calculate_repo_status_priority(repo: &Repository, local_status: Option<&LocalRepoStatus>) -> u8 {
+    // Priority: 0 = critical (highest), 1 = warning, 2 = clean (lowest)
+    if let Some(status) = local_status {
+        if status.uncommitted_files > 0 || status.unpushed_commits > 0 || status.behind_commits > 0 {
+            return 0; // Critical
+        }
+    }
+    if repo.unmerged_count > 0 {
+        return 1; // Warning
+    }
+    2 // Clean
+}
+
+#[cfg(target_arch = "wasm32")]
+fn sort_repositories(
+    repos: &mut [Repository],
+    sort_state: &SortState,
+    local_statuses: &std::collections::HashMap<String, LocalRepoStatus>,
+) {
+    repos.sort_by(|a, b| {
+        let cmp = match sort_state.column {
+            SortColumn::Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            SortColumn::Language => a.language.to_lowercase().cmp(&b.language.to_lowercase()),
+            SortColumn::LastUpdated => a.last_push.cmp(&b.last_push),
+            SortColumn::Status => {
+                let a_priority = calculate_repo_status_priority(a, local_statuses.get(&a.id));
+                let b_priority = calculate_repo_status_priority(b, local_statuses.get(&b.id));
+                a_priority.cmp(&b_priority)
+            }
+        };
+
+        if sort_state.ascending {
+            cmp
+        } else {
+            cmp.reverse()
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
 async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
     use gloo::net::http::Request;
     use serde::Deserialize;
@@ -1406,7 +1765,10 @@ async fn fetch_repos() -> Result<Vec<RepoGroup>, String> {
         ungrouped: Vec<RepoJson>,
     }
 
-    let response = Request::get("/repos.json")
+    // Add timestamp to bypass browser caching
+    let timestamp = js_sys::Date::now() as u64;
+    let url = format!("/repos.json?ts={}", timestamp);
+    let response = Request::get(&url)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch repos: {:?}", e))?;
@@ -1754,12 +2116,30 @@ async fn fetch_build_info() -> Result<BuildInfo, String> {
 }
 
 #[cfg(target_arch = "wasm32")]
+async fn trigger_local_repo_scan() -> Result<(), String> {
+    use gloo::net::http::Request;
+
+    let response = Request::post("/api/local-repos/scan")
+        .header("Content-Type", "application/json")
+        .body("{}")
+        .map_err(|e| format!("Failed to create request: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Failed to trigger scan: {}", e))?;
+
+    if !response.ok() {
+        return Err(format!("Scan failed with status: {}", response.status()));
+    }
+
+    Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
 async fn fetch_local_repo_statuses() -> Result<Vec<LocalRepoStatus>, String> {
     use gloo::net::http::Request;
     use serde::Deserialize;
 
     #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
     struct LocalRepoStatusJson {
         id: i64,
         repo_id: String,
@@ -1772,7 +2152,10 @@ async fn fetch_local_repo_statuses() -> Result<Vec<LocalRepoStatus>, String> {
         last_checked: String,
     }
 
-    let response = Request::get("/api/local-repos/status")
+    // Add timestamp to bypass browser caching
+    let timestamp = js_sys::Date::now() as u64;
+    let url = format!("/api/local-repos/status?ts={}", timestamp);
+    let response = Request::get(&url)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch local repo statuses: {:?}", e))?;
@@ -1863,6 +2246,34 @@ async fn add_local_repo_root(path: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to add local repo root: {:?}", e))?;
 
     let result: AddLocalRepoRootResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {:?}", e))?;
+
+    if result.success {
+        Ok(())
+    } else {
+        Err(result.message)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn remove_local_repo_root(id: i64) -> Result<(), String> {
+    use gloo::net::http::Request;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct RemoveLocalRepoRootResponse {
+        success: bool,
+        message: String,
+    }
+
+    let response = Request::delete(&format!("/api/local-repos/roots/{}", id))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to remove local repo root: {:?}", e))?;
+
+    let result: RemoveLocalRepoRootResponse = response
         .json()
         .await
         .map_err(|e| format!("Failed to parse response: {:?}", e))?;
