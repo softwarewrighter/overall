@@ -1335,6 +1335,46 @@
                 width: 100%;
             }
         }
+
+        /* Spinner overlay for loading states */
+        .spinner {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .spinner-container {
+            text-align: center;
+            color: #c9d1d9;
+        }
+
+        .spinner-large {
+            font-size: 64px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        .spinner-text {
+            font-size: 18px;
+            color: #8b949e;
+        }
     </style>
 </head>
 <body>

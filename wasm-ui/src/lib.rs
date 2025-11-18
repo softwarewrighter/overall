@@ -116,6 +116,9 @@ fn app() -> Html {
     let show_add_dialog = use_state(|| false);
     let show_settings = use_state(|| false);
     let dragged_repo_id = use_state(|| None::<String>);
+    let loading_repo = use_state(|| None::<String>);
+    let refreshing = use_state(|| false);
+    let last_refresh = use_state(|| None::<f64>);
     let local_repo_statuses =
         use_state(|| std::collections::HashMap::<String, LocalRepoStatus>::new());
     let sort_state = use_state(|| SortState {
@@ -222,28 +225,64 @@ fn app() -> Html {
 
     let on_repo_click = {
         let selected_repo = selected_repo.clone();
+        let loading_repo = loading_repo.clone();
         let groups = groups.clone();
         let local_repo_statuses = local_repo_statuses.clone();
         Callback::from(move |repo: Repository| {
-            // Set selected repo immediately to show dialog
-            selected_repo.set(Some(repo));
+            let repo_id = repo.id.clone();
 
-            // Refresh data in background
+            // Show spinner overlay immediately
+            loading_repo.set(Some(repo_id.clone()));
+
+            // Clone for async block
+            let selected_repo = selected_repo.clone();
+            let loading_repo = loading_repo.clone();
             let groups = groups.clone();
             let local_repo_statuses = local_repo_statuses.clone();
+
             wasm_bindgen_futures::spawn_local(async move {
-                // Reload repo data
-                if let Ok(loaded_groups) = fetch_repos().await {
-                    groups.set(loaded_groups);
+                // Step 1: Sync this specific repo from GitHub
+                if let Err(e) = sync_single_repo(&repo_id).await {
+                    web_sys::console::error_1(
+                        &format!("Failed to sync repo {}: {}", repo_id, e).into(),
+                    );
+                    loading_repo.set(None);
+                    return;
                 }
 
-                // Reload local repo statuses
+                // Step 2: Fetch fresh /repos.json
+                let fresh_groups = match fetch_repos().await {
+                    Ok(g) => g,
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to fetch repos: {}", e).into());
+                        loading_repo.set(None);
+                        return;
+                    }
+                };
+
+                // Step 3: Fetch fresh local repo statuses
                 if let Ok(statuses) = fetch_local_repo_statuses().await {
                     let status_map: std::collections::HashMap<String, LocalRepoStatus> = statuses
                         .into_iter()
                         .map(|s| (s.repo_id.clone(), s))
                         .collect();
                     local_repo_statuses.set(status_map);
+                }
+
+                // Step 4: Find the fresh repo data
+                let fresh_repo = fresh_groups
+                    .iter()
+                    .flat_map(|g| &g.repos)
+                    .find(|r| r.id == repo_id)
+                    .cloned();
+
+                // Step 5: Update state
+                groups.set(fresh_groups);
+
+                // Step 6: Hide spinner and show dialog
+                loading_repo.set(None);
+                if let Some(fresh_repo) = fresh_repo {
+                    selected_repo.set(Some(fresh_repo));
                 }
             });
         })
@@ -287,13 +326,21 @@ fn app() -> Html {
     let on_refresh = {
         let groups = groups.clone();
         let local_repo_statuses = local_repo_statuses.clone();
+        let refreshing = refreshing.clone();
+        let last_refresh = last_refresh.clone();
         Callback::from(move |_| {
+            // Set refreshing state
+            refreshing.set(true);
+
             let groups = groups.clone();
             let local_repo_statuses = local_repo_statuses.clone();
+            let refreshing = refreshing.clone();
+            let last_refresh = last_refresh.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 // Trigger the scan
                 if let Err(e) = trigger_local_repo_scan().await {
                     web_sys::console::error_1(&format!("Failed to trigger scan: {}", e).into());
+                    refreshing.set(false);
                     return;
                 }
 
@@ -313,6 +360,12 @@ fn app() -> Html {
                         .collect();
                     local_repo_statuses.set(status_map);
                 }
+
+                // Update last refresh timestamp
+                last_refresh.set(Some(js_sys::Date::now()));
+
+                // Clear refreshing state
+                refreshing.set(false);
             });
         })
     };
@@ -375,7 +428,21 @@ fn app() -> Html {
                         <span class="tagline">{ "Repository Manager" }</span>
                     </div>
                     <div class="header-right">
-                        <button class="btn-refresh" onclick={on_refresh} title="Refresh local repository status">
+                        { if let Some(timestamp) = *last_refresh {
+                            html! {
+                                <span class="last-refresh" title={format!("Last refreshed: {}", js_sys::Date::new(&timestamp.into()).to_iso_string())}>
+                                    { format!("Last: {}", format_refresh_time(timestamp)) }
+                                </span>
+                            }
+                        } else {
+                            html! {}
+                        }}
+                        <button
+                            class={if *refreshing { "btn-refresh refreshing" } else { "btn-refresh" }}
+                            onclick={on_refresh}
+                            disabled={*refreshing}
+                            title="Refresh local repository status"
+                        >
                             { "🔄" }
                         </button>
                         <button class="btn-settings" onclick={on_open_settings} title="Local Repository Settings">
@@ -514,6 +581,19 @@ fn app() -> Html {
 
             { if *show_settings {
                 html! { <SettingsDialog on_close={on_close_settings} /> }
+            } else {
+                html! {}
+            }}
+
+            { if let Some(repo_id) = (*loading_repo).clone() {
+                html! {
+                    <div class="spinner-overlay">
+                        <div class="spinner-container">
+                            <div class="spinner-large">{ "⟳" }</div>
+                            <div class="spinner-text">{ format!("Refreshing {}...", repo_id) }</div>
+                        </div>
+                    </div>
+                }
             } else {
                 html! {}
             }}
@@ -1732,6 +1812,39 @@ fn get_mock_groups() -> Vec<RepoGroup> {
 }
 
 #[cfg(target_arch = "wasm32")]
+fn format_refresh_time(timestamp_ms: f64) -> String {
+    let now = js_sys::Date::now();
+    let seconds = ((now - timestamp_ms) / 1000.0) as i64;
+
+    if seconds < 10 {
+        "just now".to_string()
+    } else if seconds < 60 {
+        format!("{} seconds ago", seconds)
+    } else if seconds < 3600 {
+        let minutes = seconds / 60;
+        if minutes == 1 {
+            "1 minute ago".to_string()
+        } else {
+            format!("{} minutes ago", minutes)
+        }
+    } else if seconds < 86400 {
+        let hours = seconds / 3600;
+        if hours == 1 {
+            "1 hour ago".to_string()
+        } else {
+            format!("{} hours ago", hours)
+        }
+    } else {
+        let days = seconds / 86400;
+        if days == 1 {
+            "1 day ago".to_string()
+        } else {
+            format!("{} days ago", days)
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 fn calculate_repo_status_priority(repo: &Repository, local_status: Option<&LocalRepoStatus>) -> u8 {
     // TRAFFIC LIGHT PRIORITY (lower number = more urgent):
     // Priority 0 = RED (needs-sync)    - 🛑 STOP - Red stop sign / red ! - MOST URGENT
@@ -2133,6 +2246,15 @@ async fn create_all_pull_requests(repo_id: &str) -> Result<String, String> {
                     if let Some(pr_url) = &pr_result.pr_url {
                         let _ = window.open_with_url_and_target(pr_url, "_blank");
                     }
+                } else if let Some(error) = &pr_result.error {
+                    // Log errors for failed PR creations
+                    web_sys::console::warn_1(
+                        &format!(
+                            "Failed to create PR for branch {}: {}",
+                            pr_result.branch_name, error
+                        )
+                        .into(),
+                    );
                 }
             }
         }
@@ -2229,6 +2351,35 @@ async fn trigger_local_repo_scan() -> Result<(), String> {
 
     if !response.ok() {
         return Err(format!("Scan failed with status: {}", response.status()));
+    }
+
+    Ok(())
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn sync_single_repo(repo_id: &str) -> Result<(), String> {
+    use gloo::net::http::Request;
+    use serde::Serialize;
+
+    #[derive(Serialize)]
+    struct SyncRepoRequest {
+        repo_id: String,
+    }
+
+    let request_body = SyncRepoRequest {
+        repo_id: repo_id.to_string(),
+    };
+
+    let response = Request::post("/api/repos/sync")
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .map_err(|e| format!("Failed to create sync request: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Failed to sync repo: {}", e))?;
+
+    if !response.ok() {
+        return Err(format!("Sync failed with status: {}", response.status()));
     }
 
     Ok(())
