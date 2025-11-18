@@ -106,7 +106,7 @@ overall/
 
 ## Development Process
 
-See **[CLAUDE.md](../CLAUDE.md)** for detailed development guidelines including:
+See **[CLAUDE.md](https://github.com/softwarewrighter/overall/blob/main/CLAUDE.md)** for detailed development guidelines including:
 - Test-Driven Development (TDD) requirements
 - Checkpoint process before commits
 - Testing strategy and mock patterns
@@ -115,7 +115,7 @@ See **[CLAUDE.md](../CLAUDE.md)** for detailed development guidelines including:
 ## Contributing
 
 1. Read [Architecture Overview](Architecture-Overview) to understand the system
-2. Review [CLAUDE.md](../CLAUDE.md) for development processes
+2. Review [CLAUDE.md](https://github.com/softwarewrighter/overall/blob/main/CLAUDE.md) for development processes
 3. Write tests first (TDD)
 4. Run checkpoint process before committing:
    ```bash
