@@ -105,7 +105,7 @@ sequenceDiagram
         end
     end
 
-    CLI->>CLI: Build JSON structure:<br/>groups -> repos -> branches/PRs
+    CLI->>CLI: Build JSON structure: groups -> repos -> branches/PRs
     CLI->>FS: Write to static/repos.json
     FS-->>CLI: File written
     CLI-->>User: Export complete: static/repos.json
@@ -208,7 +208,7 @@ sequenceDiagram
     User->>UI: Click "Add Local Root"
     UI->>User: Show path input dialog
     User->>UI: Enter /home/user/projects
-    UI->>API: POST /api/local-repo-roots<br/>{path: "/home/user/projects"}
+    UI->>API: POST /api/local-repo-roots {path: "/home/user/projects"}
     API->>DB: INSERT INTO local_repo_roots
     DB-->>API: Root added
     API-->>UI: Success
@@ -256,13 +256,13 @@ The system detects:
 
 ```mermaid
 graph TD
-    Start[Check Repository] --> Unpushed{Unpushed or<br/>Behind?}
-    Unpushed -->|Yes| NeedsSync[Priority 0:<br/>NEEDS SYNC 🔴]
-    Unpushed -->|No| Uncommitted{Uncommitted<br/>Files?}
-    Uncommitted -->|Yes| LocalChanges[Priority 1:<br/>LOCAL CHANGES ⚠️]
-    Uncommitted -->|No| Unmerged{Unmerged<br/>Branches?}
-    Unmerged -->|Yes| Stale[Priority 2:<br/>STALE ℹ️]
-    Unmerged -->|No| Complete[Priority 3:<br/>COMPLETE ✅]
+    Start[Check Repository] --> Unpushed{Unpushed or Behind?}
+    Unpushed -->|Yes| NeedsSync[Priority 0: NEEDS SYNC 🔴]
+    Unpushed -->|No| Uncommitted{Uncommitted Files?}
+    Uncommitted -->|Yes| LocalChanges[Priority 1: LOCAL CHANGES ⚠️]
+    Uncommitted -->|No| Unmerged{Unmerged Branches?}
+    Unmerged -->|Yes| Stale[Priority 2: STALE ℹ️]
+    Unmerged -->|No| Complete[Priority 3: COMPLETE ✅]
 ```
 
 ## Create Pull Request
@@ -281,7 +281,7 @@ sequenceDiagram
     User->>UI: Click "Create PR" on branch row
     UI->>User: Show PR details dialog
     User->>UI: Enter title, description, base branch
-    UI->>API: POST /api/repos/create-pr<br/>{repo_id, branch, title, body, base}
+    UI->>API: POST /api/repos/create-pr {repo_id, branch, title, body, base}
 
     API->>DB: SELECT branch status
     DB-->>API: Branch data
@@ -290,12 +290,12 @@ sequenceDiagram
         API-->>UI: Error: PR already exists
         UI->>User: Show error message
     else No existing PR
-        API->>GH: gh pr create<br/>--title "..." --body "..."<br/>--base main --head feature
+        API->>GH: gh pr create --title "..." --body "..." --base main --head feature
         GH->>GitHub: POST /repos/<owner>/<repo>/pulls
         GitHub-->>GH: PR created (#123)
         GH-->>API: PR number and URL
 
-        API->>DB: INSERT INTO pull_requests<br/>(number, state, title, ...)
+        API->>DB: INSERT INTO pull_requests (number, state, title, ...)
         DB-->>API: PR saved
 
         API->>DB: UPDATE branches SET status = 'PROpen'
@@ -384,17 +384,17 @@ sequenceDiagram
     DB-->>API: Repository context
 
     API->>AI: analyze_project(repo_data)
-    AI->>AI: Build analysis prompt:<br/>repo name, language, branches,<br/>activity, unmerged count
+    AI->>AI: Build analysis prompt: repo name, language, branches, activity, unmerged count
 
-    AI->>Ask: ask -p ollama -m phi3:3.8b<br/>"Analyze this repository..."
+    AI->>Ask: ask -p ollama -m phi3:3.8b "Analyze this repository..."
     Ask->>Ollama: POST /api/generate
-    Ollama->>Ollama: Generate analysis<br/>(~5-10 seconds)
+    Ollama->>Ollama: Generate analysis (~5-10 seconds)
     Ollama-->>Ask: Analysis text
     Ask-->>AI: Analysis result
 
-    AI->>AI: Parse analysis:<br/>- Priority score (1-10)<br/>- Suggested actions<br/>- Branch recommendations
+    AI->>AI: Parse analysis: - Priority score (1-10) - Suggested actions - Branch recommendations
 
-    AI->>DB: INSERT INTO ai_analysis<br/>(repo_id, result, created_at)
+    AI->>DB: INSERT INTO ai_analysis (repo_id, result, created_at)
     DB-->>AI: Analysis cached
 
     AI-->>API: Analysis complete
@@ -442,7 +442,7 @@ sequenceDiagram
     User->>UI: Click "New Group"
     UI->>User: Show group name dialog
     User->>UI: Enter "High Priority"
-    UI->>API: POST /api/groups<br/>{name: "High Priority"}
+    UI->>API: POST /api/groups {name: "High Priority"}
 
     API->>DB: INSERT INTO groups (name, display_order, created_at)
     DB-->>API: Group created (id=5)
@@ -460,7 +460,7 @@ sequenceDiagram
 
     API->>DB: BEGIN TRANSACTION
     API->>DB: DELETE FROM repo_groups WHERE repo_id = 'repo123'
-    API->>DB: INSERT INTO repo_groups<br/>(repo_id, group_id, added_at)
+    API->>DB: INSERT INTO repo_groups (repo_id, group_id, added_at)
     API->>DB: COMMIT
 
     API->>CLI: Trigger export
@@ -557,7 +557,7 @@ sequenceDiagram
     else Database locked
         API->>API: Retry with backoff
     else Corruption
-        API-->>User: Error: Database corrupted<br/>Run: overall repair-db
+        API-->>User: Error: Database corrupted Run: overall repair-db
     end
 ```
 

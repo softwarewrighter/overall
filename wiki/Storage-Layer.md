@@ -535,9 +535,9 @@ INSERT INTO config VALUES ('auto_refresh_interval', '60');
 graph TB
     Query[SQL Query] --> QP[Query Planner]
 
-    QP --> Idx1{pushed_at<br/>index?}
-    QP --> Idx2{priority<br/>index?}
-    QP --> Idx3{repo_id<br/>index?}
+    QP --> Idx1{pushed_at index?}
+    QP --> Idx2{priority index?}
+    QP --> Idx3{repo_id index?}
 
     Idx1 -->|Used| Fast1[Index Scan]
     Idx2 -->|Used| Fast2[Index Scan]

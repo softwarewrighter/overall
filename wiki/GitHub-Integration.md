@@ -76,7 +76,7 @@ sequenceDiagram
     GitHub->>User: Show permission approval
     User->>GitHub: Approve
     GitHub->>GH: OAuth token
-    GH->>GH: Store token securely<br/>(OS keychain)
+    GH->>GH: Store token securely (OS keychain)
     GH->>Terminal: Authentication complete
 ```
 
@@ -362,7 +362,7 @@ pub fn create_pull_request(request: &PrRequest) -> Result<PullRequest> {
 ```mermaid
 graph LR
     subgraph "GitHub API Response"
-        GHRepo[GhRepo<br/>JSON from gh CLI]
+        GHRepo[GhRepo JSON from gh CLI]
         GHBranch[GhBranch]
         GHPR[GhPullRequest]
     end
@@ -418,13 +418,13 @@ graph LR
 
 ```mermaid
 graph TD
-    Start[New Branch] --> HasPR{Has Open<br/>PR?}
+    Start[New Branch] --> HasPR{Has Open PR?}
 
     HasPR -->|Yes| PROpen[Status: PROpen]
     HasPR -->|No| CheckAhead{Ahead > 0?}
 
     CheckAhead -->|Yes| CheckBehind{Behind > 0?}
-    CheckAhead -->|No| CheckMerged{In default<br/>branch?}
+    CheckAhead -->|No| CheckMerged{In default branch?}
 
     CheckBehind -->|Yes| NeedsSync[Status: NeedsSync]
     CheckBehind -->|No| ReadyPR[Status: ReadyForPR]
@@ -575,10 +575,10 @@ pub fn check_rate_limit() -> Result<RateLimitInfo> {
 
 ```mermaid
 graph TB
-    Start[API Request] --> Cache{In Cache &<br/>Fresh?}
+    Start[API Request] --> Cache{In Cache & Fresh?}
 
     Cache -->|Yes| Return[Return Cached]
-    Cache -->|No| Check{Rate Limit<br/>OK?}
+    Cache -->|No| Check{Rate Limit OK?}
 
     Check -->|Yes| Fetch[Execute Request]
     Check -->|No| Wait[Wait for Reset]

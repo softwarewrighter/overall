@@ -17,25 +17,25 @@ The GitHub Repository Manager follows a **client-server architecture** with a Ru
 ```mermaid
 graph TB
     subgraph "Browser"
-        UI[Yew Frontend<br/>WASM]
+        UI[Yew Frontend WASM]
         LS[LocalStorage]
     end
 
     subgraph "Backend Service"
-        Server[Axum Web Server<br/>:8459]
+        Server[Axum Web Server :8459]
         CLI[CLI Commands]
         Analysis[Branch Analysis]
         AI[AI Integration]
     end
 
     subgraph "Data Layer"
-        DB[(SQLite Database<br/>~/.overall/overall.db)]
-        JSON[repos.json<br/>Static Export]
+        DB[(SQLite Database ~/.overall/overall.db)]
+        JSON[repos.json Static Export]
     end
 
     subgraph "External Services"
-        GH[GitHub API<br/>via gh CLI]
-        Ollama[Ollama LLM<br/>localhost:11434]
+        GH[GitHub API via gh CLI]
+        Ollama[Ollama LLM localhost:11434]
     end
 
     UI -->|REST API| Server
@@ -131,15 +131,15 @@ graph LR
 
 ```mermaid
 graph TB
-    Main[main.rs<br/>CLI Entry Point]
+    Main[main.rs CLI Entry Point]
 
     subgraph "Core Modules"
-        GH[github/<br/>GitHub Integration]
-        ST[storage/<br/>Database Layer]
-        AN[analysis/<br/>Branch Analysis]
-        AI[ai/<br/>LLM Integration]
-        SV[server/<br/>Web Server]
-        MD[models/<br/>Data Structures]
+        GH[github/ GitHub Integration]
+        ST[storage/ Database Layer]
+        AN[analysis/ Branch Analysis]
+        AI[ai/ LLM Integration]
+        SV[server/ Web Server]
+        MD[models/ Data Structures]
     end
 
     Main --> GH
@@ -203,7 +203,7 @@ graph TB
 
 ```mermaid
 graph TB
-    Lib[lib.rs<br/>Main Component]
+    Lib[lib.rs Main Component]
 
     subgraph "UI Components"
         App[App Component]
@@ -270,7 +270,7 @@ App (root)
 ```mermaid
 graph TB
     subgraph "Developer Machine"
-        Browser[Web Browser<br/>localhost:8459]
+        Browser[Web Browser localhost:8459]
 
         subgraph "Backend Process"
             Server[overall serve]
@@ -278,8 +278,8 @@ graph TB
         end
 
         subgraph "External Tools"
-            GH[gh CLI<br/>authenticated]
-            OL[Ollama Service<br/>localhost:11434]
+            GH[gh CLI authenticated]
+            OL[Ollama Service localhost:11434]
         end
 
         Browser -->|HTTP| Server
@@ -297,14 +297,14 @@ graph TB
         Browser[Web Browser]
 
         subgraph "Application"
-            Server[overall binary<br/>Background Service]
-            DB[(User Data Directory<br/>overall.db)]
-            Static[Static Files<br/>WASM + HTML/CSS]
+            Server[overall binary Background Service]
+            DB[(User Data Directory overall.db)]
+            Static[Static Files WASM + HTML/CSS]
         end
 
         subgraph "User Installed"
             GH[gh CLI]
-            OL[Ollama<br/>Optional]
+            OL[Ollama Optional]
         end
 
         Browser -->|localhost:8459| Server
@@ -324,7 +324,7 @@ graph TB
     end
 
     subgraph "Cloud Infrastructure"
-        CDN[CDN<br/>Static Assets]
+        CDN[CDN Static Assets]
         LB[Load Balancer]
 
         subgraph "Application Tier"
@@ -338,12 +338,12 @@ graph TB
         end
 
         subgraph "AI Tier"
-            LLM[Cloud LLM API<br/>OpenAI/Anthropic]
+            LLM[Cloud LLM API OpenAI/Anthropic]
         end
     end
 
     subgraph "External"
-        GH[GitHub API<br/>OAuth]
+        GH[GitHub API OAuth]
     end
 
     UI -->|Static| CDN
@@ -367,24 +367,24 @@ graph TB
 graph LR
     subgraph "Core"
         Rust[Rust 2021]
-        Tokio[tokio<br/>Async Runtime]
+        Tokio[tokio Async Runtime]
     end
 
     subgraph "Web"
-        Axum[axum<br/>Web Framework]
-        Tower[tower<br/>Middleware]
-        Hyper[hyper<br/>HTTP]
+        Axum[axum Web Framework]
+        Tower[tower Middleware]
+        Hyper[hyper HTTP]
     end
 
     subgraph "Data"
-        Rusqlite[rusqlite<br/>SQLite]
-        Serde[serde<br/>Serialization]
+        Rusqlite[rusqlite SQLite]
+        Serde[serde Serialization]
     end
 
     subgraph "Utils"
-        Chrono[chrono<br/>DateTime]
-        Anyhow[anyhow<br/>Error Handling]
-        Tracing[tracing<br/>Logging]
+        Chrono[chrono DateTime]
+        Anyhow[anyhow Error Handling]
+        Tracing[tracing Logging]
     end
 
     Rust --> Tokio
@@ -405,18 +405,18 @@ graph LR
 graph LR
     subgraph "Core"
         Rust2[Rust 2021]
-        Yew[yew<br/>UI Framework]
+        Yew[yew UI Framework]
     end
 
     subgraph "WASM"
-        WasmPack[wasm-pack<br/>Build Tool]
-        WasmBindgen[wasm-bindgen<br/>JS Interop]
-        WebSys[web-sys<br/>Web APIs]
+        WasmPack[wasm-pack Build Tool]
+        WasmBindgen[wasm-bindgen JS Interop]
+        WebSys[web-sys Web APIs]
     end
 
     subgraph "Utils"
-        Gloo[gloo<br/>Web Utilities]
-        Serde2[serde<br/>JSON]
+        Gloo[gloo Web Utilities]
+        Serde2[serde JSON]
     end
 
     Rust2 --> Yew
@@ -500,19 +500,19 @@ graph LR
 ```mermaid
 graph TB
     subgraph "Authentication"
-        GHAuth[GitHub Authentication<br/>via gh CLI]
+        GHAuth[GitHub Authentication via gh CLI]
         NoStore[No Credentials Stored]
     end
 
     subgraph "Data Privacy"
         Local[Local-Only Data]
-        Metadata[Metadata Only<br/>No Code Content]
-        LocalAI[Local AI<br/>Ollama]
+        Metadata[Metadata Only No Code Content]
+        LocalAI[Local AI Ollama]
     end
 
     subgraph "Isolation"
         WASM[WASM Sandbox]
-        SQLite[File Permissions<br/>User-Only]
+        SQLite[File Permissions User-Only]
     end
 
     GHAuth --> NoStore

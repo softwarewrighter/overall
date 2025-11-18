@@ -81,27 +81,27 @@ cd wasm-ui && wasm-pack build --target web --release
 
 ```mermaid
 graph TB
-    App[App Component<br/>Root]
+    App[App Component Root]
 
-    App --> State[State Management<br/>use_state hooks]
-    App --> Fetch[Data Fetching<br/>use_effect]
+    App --> State[State Management use_state hooks]
+    App --> Fetch[Data Fetching use_effect]
 
     App --> UI[UI Rendering]
 
-    UI --> Header[Header Bar<br/>Refresh controls]
-    UI --> Tabs[Tab Bar<br/>Group tabs]
-    UI --> Table[Repository Table<br/>Main data display]
-    UI --> Dialogs[Dialog Modals<br/>Forms]
+    UI --> Header[Header Bar Refresh controls]
+    UI --> Tabs[Tab Bar Group tabs]
+    UI --> Table[Repository Table Main data display]
+    UI --> Dialogs[Dialog Modals Forms]
 
-    Tabs --> Tab[Tab Component<br/>Per group]
-    Tab --> StatusIcon1[Status Icon<br/>Aggregate status]
+    Tabs --> Tab[Tab Component Per group]
+    Tab --> StatusIcon1[Status Icon Aggregate status]
 
-    Table --> TableHeader[Table Header<br/>Sortable columns]
-    Table --> Rows[Repository Rows<br/>Foreach repo]
+    Table --> TableHeader[Table Header Sortable columns]
+    Table --> Rows[Repository Rows Foreach repo]
 
-    Rows --> Row[Repository Row<br/>Single repo]
-    Row --> StatusIcon2[Status Icon<br/>Repo status]
-    Row --> Actions[Action Buttons<br/>Create PR, etc.]
+    Rows --> Row[Repository Row Single repo]
+    Row --> StatusIcon2[Status Icon Repo status]
+    Row --> Actions[Action Buttons Create PR, etc.]
 
     Dialogs --> AddGroup[Add Group Dialog]
     Dialogs --> AddRoot[Add Local Root Dialog]
@@ -268,18 +268,18 @@ let fetch_status = {
 graph TB
     CalcStatus[calculate_repo_status_priority]
 
-    CalcStatus --> Check1{unpushed > 0 OR<br/>behind > 0 OR<br/>any branch ahead/behind?}
+    CalcStatus --> Check1{unpushed > 0 OR behind > 0 OR any branch ahead/behind?}
     CalcStatus --> Check2{uncommitted > 0?}
     CalcStatus --> Check3{unmerged_count > 0?}
 
-    Check1 -->|Yes| Priority0[Priority 0<br/>needs-sync 🔴]
+    Check1 -->|Yes| Priority0[Priority 0 needs-sync 🔴]
     Check1 -->|No| Check2
 
-    Check2 -->|Yes| Priority1[Priority 1<br/>local-changes ⚠️]
+    Check2 -->|Yes| Priority1[Priority 1 local-changes ⚠️]
     Check2 -->|No| Check3
 
-    Check3 -->|Yes| Priority2[Priority 2<br/>stale ℹ️]
-    Check3 -->|No| Priority3[Priority 3<br/>complete ✅]
+    Check3 -->|Yes| Priority2[Priority 2 stale ℹ️]
+    Check3 -->|No| Priority3[Priority 3 complete ✅]
 
     Priority0 --> Icon0[/icons/needs-sync.png]
     Priority1 --> Icon1[/icons/local-changes.png]
